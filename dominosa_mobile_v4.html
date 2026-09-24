@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Dominosa Mobile</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--blue:#2878f0;--ink:#17202d;--muted:#667085;--line:#cbd5e1;--bg:#f4f6f8;--cell:42px}
+body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);overscroll-behavior:none}
+.app{max-width:620px;margin:auto;padding:16px 12px 28px}
+h1{font-size:30px;margin:6px 0 2px}.sub{color:var(--muted);margin-bottom:10px}
+.stats,.controls,.modes,.keypad{display:flex;gap:7px;flex-wrap:wrap}
+.pill,button,select{background:white;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:15px;color:var(--ink)}
+button{touch-action:manipulation} button.primary{background:var(--blue);color:white;border-color:var(--blue)}
+.controls{margin:9px 0}.modes button{flex:1;font-weight:700;min-height:46px}.modes .active{background:var(--ink);color:white}
+.keypad{margin:8px 0;flex-wrap:nowrap}.keypad button{flex:1;padding:10px 0;font-size:20px;font-weight:800;color:var(--blue)}
+.quick{background:white;border:1px solid var(--line);border-radius:10px;padding:9px 11px;color:var(--muted);margin:8px 0}
+.board-shell{width:100%;overflow:hidden;background:white;border:1px solid var(--line);border-radius:12px;padding:8px;margin-top:10px}
+#board{position:relative;margin:auto;touch-action:none;user-select:none;-webkit-user-select:none}
+.cell{position:absolute;width:var(--cell);height:var(--cell);display:flex;align-items:center;justify-content:center;border:1px solid #b8c2cf;background:#fff;border-radius:6px;font-size:22px;font-weight:750;z-index:1}
+.cell.paired{background:#dcecff;border-color:#69a4f5}.cell.flash-red{animation:redflash .16s alternate 4}.cell.flash-green{animation:greenflash .16s alternate 4}
+.domino{position:absolute;border:3px solid var(--blue);border-radius:9px;pointer-events:none;z-index:3}
+.bar{position:absolute;background:#6b7280;border-radius:3px;pointer-events:none;z-index:4}
+.preview{position:absolute;border:3px dashed #8a94a3;border-radius:9px;pointer-events:none;z-index:5}
+.help{font-size:13px;line-height:1.4;color:var(--muted);margin-top:10px}
+@keyframes redflash{to{background:#ffb7b7}} @keyframes greenflash{to{background:#a9edbd}}
+@media(max-width:420px){.app{padding:10px 8px}.controls button,.controls select{padding:8px 9px}.sub{font-size:14px}}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>Dominosa</h1>
+<div class="sub">Use every domino from 0–0 through 6–6 exactly once.</div>
+<div class="stats"><span class="pill">Time <b id="time">00:00</b></span><span class="pill">Moves <b id="moves">0</b></span><span class="pill">Pairs <b id="pairs">0/28</b></span></div>
+<div class="controls">
+<select id="difficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select>
+<button class="primary" id="newBtn">New Puzzle</button><button id="undoBtn">Undo</button><button id="redoBtn">Redo</button>
+<button id="hintBtn">Hint</button><button id="checkBtn">Check</button><button id="solutionBtn">Solution</button>
+</div>
+<div class="modes"><button id="pairMode" class="active">Pair / Unpair</button><button id="barMode">Add / Remove Bar</button></div>
+<div class="keypad" id="keypad"></div>
+<div class="quick">Quick Check: <b id="quick">—</b> &nbsp; Tap two numbers to flash possible locations.</div>
+<div id="errorBox" style="display:none;background:#ffe8e8;border:1px solid #e88;padding:8px;border-radius:8px;margin-top:8px;font-size:12px"></div>
+<div class="board-shell"><div id="board"></div></div>
+<div class="help">Drag your finger from one cell to a neighbouring cell. In Pair mode it makes/removes a domino. In Bar mode it marks that pairing impossible. This version is written specifically for touch screens and does not depend on the desktop code.</div>
+</div>
+<script>
+"use strict";
+window.addEventListener("error",function(e){var b=document.getElementById("errorBox");if(b){b.style.display="block";b.textContent="JavaScript error: "+e.message+" (line "+e.lineno+")";}});
+const N=6, ROWS=7, COLS=8, GAP=4;
+const board=document.getElementById("board"), pairsEl=document.getElementById("pairs"), movesEl=document.getElementById("moves");
+const timeEl=document.getElementById("time"), keypadEl=document.getElementById("keypad");
+const newBtnEl=document.getElementById("newBtn"), undoBtnEl=document.getElementById("undoBtn"), redoBtnEl=document.getElementById("redoBtn");
+const hintBtnEl=document.getElementById("hintBtn"), checkBtnEl=document.getElementById("checkBtn"), solutionBtnEl=document.getElementById("solutionBtn");
+const pairModeEl=document.getElementById("pairMode"), barModeEl=document.getElementById("barMode");
+let nums=[], solution=[], paired=new Map(), blocked=new Set(), history=[], future=[], moves=0, mode="pair", quick=[], startTime=Date.now(), timer=null;
+const E=(a,b)=>a<b?a+"-"+b:b+"-"+a, rc=i=>[Math.floor(i/COLS),i%COLS], idx=(r,c)=>r*COLS+c;
+function adj(a,b){let [r1,c1]=rc(a),[r2,c2]=rc(b);return Math.abs(r1-r2)+Math.abs(c1-c2)===1}
+function pairKey(a,b){let x=nums[a],y=nums[b];return x<y?x+"-"+y:y+"-"+x}
+function snapshot(){return {paired:[...paired],blocked:[...blocked],moves}}
+function restore(s){paired=new Map(s.paired);blocked=new Set(s.blocked);moves=s.moves;render()}
+function save(){history.push(snapshot());if(history.length>150)history.shift();future=[];moves++}
+function shuffled(a){a=a.slice();for(let i=a.length-1;i;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function generate(){
+  // Tile the 7x8 rectangle randomly, then assign each of the 28 unique domino values.
+  let cells=[...Array(ROWS*COLS).keys()], tiling=[];
+  function fill(){
+    let a=cells.find(i=>!tiling.some(p=>p.includes(i))); if(a===undefined)return true;
+    let [r,c]=rc(a), choices=[];
+    if(c+1<COLS)choices.push(idx(r,c+1)); if(r+1<ROWS)choices.push(idx(r+1,c));
+    if(c>0)choices.push(idx(r,c-1)); if(r>0)choices.push(idx(r-1,c));
+    choices=shuffled(choices.filter(b=>!tiling.some(p=>p.includes(b))));
+    for(let b of choices){tiling.push([a,b]);if(fill())return true;tiling.pop()} return false;
+  }
+  fill();
+  let dom=[];for(let a=0;a<=N;a++)for(let b=a;b<=N;b++)dom.push([a,b]);dom=shuffled(dom);
+  nums=Array(ROWS*COLS).fill(0);solution=[];
+  tiling.forEach((p,k)=>{let [a,b]=p,[x,y]=Math.random()<.5?dom[k]:[dom[k][1],dom[k][0]];nums[a]=x;nums[b]=y;solution.push(E(a,b))});
+  paired.clear();blocked.clear();history=[];future=[];moves=0;quick=[];startTime=Date.now();render()
+}
+function metrics(){
+  let shell=board.parentElement, max=shell.clientWidth-16;
+  let cell=Math.floor((max-GAP*(COLS-1))/COLS);cell=Math.max(30,Math.min(50,cell));
+  document.documentElement.style.setProperty("--cell",cell+"px");
+  board.style.width=(COLS*cell+(COLS-1)*GAP)+"px";board.style.height=(ROWS*cell+(ROWS-1)*GAP)+"px";return cell
+}
+function pos(i,cell){let [r,c]=rc(i);return [c*(cell+GAP),r*(cell+GAP)]}
+function render(){
+ let cell=metrics();board.innerHTML="";
+ nums.forEach((n,i)=>{let d=document.createElement("div");d.className="cell";d.dataset.i=i;d.textContent=n;let [x,y]=pos(i,cell);d.style.left=x+"px";d.style.top=y+"px";if(paired.has(i))d.classList.add("paired");board.appendChild(d)});
+ let seen=new Set();for(let [a,b] of paired){let k=E(a,b);if(seen.has(k))continue;seen.add(k);drawOutline(a,b,cell,"domino")}
+ for(let k of blocked){let [a,b]=k.split("-").map(Number);drawBar(a,b,cell)}
+ pairsEl.textContent=(paired.size/2)+"/28";movesEl.textContent=moves
+}
+function drawOutline(a,b,cell,cls){let [x1,y1]=pos(a,cell),[x2,y2]=pos(b,cell),d=document.createElement("div");d.className=cls;
+ d.style.left=(Math.min(x1,x2)-2)+"px";d.style.top=(Math.min(y1,y2)-2)+"px";
+ d.style.width=(Math.abs(x1-x2)+cell+4)+"px";d.style.height=(Math.abs(y1-y2)+cell+4)+"px";board.appendChild(d)}
+function drawBar(a,b,cell){let [x1,y1]=pos(a,cell),[x2,y2]=pos(b,cell),d=document.createElement("div");d.className="bar";
+ if(x1!==x2){d.style.width="5px";d.style.height=(cell-10)+"px";d.style.left=(Math.min(x1,x2)+cell+GAP/2-2.5)+"px";d.style.top=(y1+5)+"px"}
+ else{d.style.height="5px";d.style.width=(cell-10)+"px";d.style.top=(Math.min(y1,y2)+cell+GAP/2-2.5)+"px";d.style.left=(x1+5)+"px"}board.appendChild(d)}
+function pair(a,b){if(!adj(a,b))return;if(mode==="bar"){save();let k=E(a,b);blocked.has(k)?blocked.delete(k):blocked.add(k);render();return}
+ if(paired.get(a)===b){save();paired.delete(a);paired.delete(b);render();return}
+ if(paired.has(a)||paired.has(b)||blocked.has(E(a,b)))return;save();paired.set(a,b);paired.set(b,a);render()}
+let dragStart=null, dragMoved=false;
+function cellAt(x,y){let el=document.elementFromPoint(x,y)?.closest(".cell");return el?Number(el.dataset.i):null}
+board.addEventListener("pointerdown",e=>{let c=e.target.closest(".cell");if(!c)return;e.preventDefault();dragStart=Number(c.dataset.i);dragMoved=false;try{board.setPointerCapture(e.pointerId)}catch(_){}});
+board.addEventListener("pointermove",e=>{if(dragStart===null)return;e.preventDefault();let j=cellAt(e.clientX,e.clientY);if(j!==null&&j!==dragStart)dragMoved=true});
+board.addEventListener("pointerup",e=>{if(dragStart===null)return;e.preventDefault();let a=dragStart,j=cellAt(e.clientX,e.clientY);dragStart=null;if(j!==null&&adj(a,j))pair(a,j)});
+board.addEventListener("pointercancel",()=>dragStart=null);
+function setMode(m){mode=m;document.getElementById("pairMode").classList.toggle("active",m==="pair");document.getElementById("barMode").classList.toggle("active",m==="bar")}
+pairModeEl.onclick=()=>setMode("pair");barModeEl.onclick=()=>setMode("bar");
+for(let n=0;n<=6;n++){let b=document.createElement("button");b.textContent=n;b.onclick=()=>{quick.push(n);if(quick.length>2)quick.shift();runQuick()};keypadEl.appendChild(b)}
+function runQuick(){document.getElementById("quick").textContent=quick.length?quick.join("–"):"—";if(quick.length<2)return;let [x,y]=quick.slice().sort((a,b)=>a-b), found=[];
+ for(let a=0;a<nums.length;a++){let [r,c]=rc(a);for(let b of [c+1<COLS?a+1:-1,r+1<ROWS?a+COLS:-1])if(b>=0&&!blocked.has(E(a,b))){let q=[nums[a],nums[b]].sort((u,v)=>u-v);if(q[0]===x&&q[1]===y)found.push([a,b])}}
+ let unpaired=found.filter(([a,b])=>paired.get(a)!==b), targets=unpaired.length?unpaired:found, cls=unpaired.length?"flash-red":"flash-green";
+ targets.flat().forEach(i=>board.querySelector('.cell[data-i="'+i+'"]')?.classList.add(cls));
+ setTimeout(()=>{board.querySelectorAll("."+cls).forEach(e=>e.classList.remove(cls));quick=[];document.getElementById("quick").textContent="—"},700)
+}
+newBtnEl.onclick=generate;undoBtnEl.onclick=()=>{if(!history.length)return;future.push(snapshot());restore(history.pop())};redoBtnEl.onclick=()=>{if(!future.length)return;history.push(snapshot());restore(future.pop())};
+checkBtnEl.onclick=()=>{if(paired.size!==56)return alert("Not finished yet.");let used=new Set();for(let [a,b] of paired)if(a<b)used.add(pairKey(a,b));alert(used.size===28?"Solved!":"Some domino values are repeated or missing.")};
+solutionBtnEl.onclick=()=>{history.push(snapshot());paired.clear();for(let k of solution){let [a,b]=k.split("-").map(Number);paired.set(a,b);paired.set(b,a)}moves++;render()};
+hintBtnEl.onclick=()=>{for(let k of solution){let [a,b]=k.split("-").map(Number);if(!paired.has(a)&&!paired.has(b)){pair(a,b);break}}};
+setInterval(()=>{let s=Math.floor((Date.now()-startTime)/1000);timeEl.textContent=String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0")},1000);
+window.addEventListener("resize",render);window.addEventListener("beforeunload",e=>{if(moves){e.preventDefault();e.returnValue=""}});
+generate();
+</script>
+</body></html>
