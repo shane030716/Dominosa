@@ -150,7 +150,7 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
   <div class="help">
     <b>How to play:</b> Pair adjacent cells so every unordered pair 0–0 through 6–6 is used exactly once.
     Drag from one cell to an adjacent cell to confirm a domino. Clicking two adjacent cells makes a grey tentative domino, indicating it is not confirmed.
-    Double-click the gap between two cells to add/remove a gray bar; on touch screens, double-tap the gap. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
+    Double-click the gap between two cells to add/remove a gray bar; on touch screens, press and hold the gap. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
     <kbd>Ctrl/Cmd+Z</kbd> undo, <kbd>Ctrl/Cmd+Y</kbd> redo.
     <b>Auto Assist:</b> Quick Check automatically connects a domino when only one location remains; when you create either a confirmed or grey tentative domino, all other adjacent occurrences of the same number pair are automatically barred. <b>Solve:</b> works step-by-step using two basic rules plus two L/T/cross rules: a cell with one open side; a number pair with only one possible location; shared-centre elimination; and reserved-pair elimination. When those rules are stuck, Solve scans from the top-left for the first unsolved cell whose only open sides are right and bottom, guesses right first, and keeps solving. If that branch causes a contradiction, it returns to that guess and tries bottom. If it gets stuck again, it makes the next guess the same way.
   </div>
@@ -709,20 +709,28 @@ document.addEventListener("selectstart",e=>{
   if(e.target.closest("input,textarea,select"))return;
   if(e.target.closest("#board,.controls,.quick,.quick-pad,.stats,.help"))e.preventDefault();
 });
-let lastGapTap={time:0,key:""};
-board.addEventListener("pointerup",e=>{
+let gapHoldTimer=null, gapHoldStart=null;
+board.addEventListener("pointerdown",e=>{
   if(e.pointerType!=="touch" || e.target.closest(".cell"))return;
   const g=gapFromPoint(e.clientX,e.clientY);
   if(!g)return;
-  const key=edge(g[0],g[1]), now=Date.now();
-  if(lastGapTap.key===key && now-lastGapTap.time<450){
-    e.preventDefault();
-    toggleBlock(g[0],g[1]);
-    lastGapTap={time:0,key:""};
-  }else{
-    lastGapTap={time:now,key};
+  gapHoldStart={x:e.clientX,y:e.clientY,g};
+  clearTimeout(gapHoldTimer);
+  gapHoldTimer=setTimeout(()=>{
+    if(!gapHoldStart)return;
+    navigator.vibrate?.(25);
+    toggleBlock(gapHoldStart.g[0],gapHoldStart.g[1]);
+    gapHoldStart=null;
+  },500);
+});
+board.addEventListener("pointermove",e=>{
+  if(!gapHoldStart)return;
+  if(Math.hypot(e.clientX-gapHoldStart.x,e.clientY-gapHoldStart.y)>10){
+    clearTimeout(gapHoldTimer);gapHoldStart=null;
   }
 });
+board.addEventListener("pointerup",()=>{clearTimeout(gapHoldTimer);gapHoldStart=null});
+board.addEventListener("pointercancel",()=>{clearTimeout(gapHoldTimer);gapHoldStart=null});
 
 function runQuickCheck(){
  document.querySelector("#quickNums").textContent=quick.join(", ");
