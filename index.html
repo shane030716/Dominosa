@@ -159,7 +159,7 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
   <div class="help">
     <b>How to play:</b> Pair adjacent cells so every unordered pair 0–0 through 6–6 is used exactly once.
     Drag from one cell to an adjacent cell to confirm a domino. Clicking two adjacent cells makes a grey tentative domino, indicating it is not confirmed.
-    Tap/click the space between two cells (or right along that cell edge) to connect them. Drag from one cell to an adjacent cell for a temporary connection. Long-press the quarter of a cell facing a neighbor to add/remove a gray bar. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
+    Tap/click the space between two cells (or right along that cell edge) to connect them. Drag from one cell to an adjacent cell for a temporary connection. On computer, double-click between two cells to add/remove a gray bar. On touch screens, long-press the quarter of a cell facing a neighbor. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
     <kbd>Ctrl/Cmd+Z</kbd> undo, <kbd>Ctrl/Cmd+Y</kbd> redo.
     <b>Auto Assist:</b> Quick Check automatically connects a domino when only one location remains; when you create either a confirmed or grey tentative domino, all other adjacent occurrences of the same number pair are automatically barred. <b>Solve:</b> works step-by-step using two basic rules plus two L/T/cross rules: a cell with one open side; a number pair with only one possible location; shared-centre elimination; and reserved-pair elimination. When those rules are stuck, Solve scans from the top-left for the first unsolved cell whose only open sides are right and bottom, guesses right first, and keeps solving. If that branch causes a contradiction, it returns to that guess and tries bottom. If it gets stuck again, it makes the next guess the same way.
   </div>
@@ -734,6 +734,17 @@ board.addEventListener("click",e=>{
   const [a,b]=g;
   if(paired.get(a)===b)removePair(a);
   else if(!paired.has(a)&&!paired.has(b)&&!blocked.has(edge(a,b)))makePair(a,b,false);
+});
+board.addEventListener("dblclick",e=>{
+  if(e.pointerType==="touch")return;
+  e.preventDefault();
+  const g=connectionFromTap(e);
+  if(!g)return;
+  const [a,b]=g;
+  // A dblclick fires click events first; remove any connection those clicks
+  // may have created, then toggle the intended bar.
+  if(paired.get(a)===b)removePair(a);
+  if(!paired.has(a)&&!paired.has(b))toggleBlock(a,b);
 });
 document.addEventListener("selectstart",e=>{
   if(e.target.closest("input,textarea,select"))return;
