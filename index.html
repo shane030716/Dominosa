@@ -100,6 +100,26 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
 .quick-pad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:0 auto 10px;width:100%;max-width:390px}
 .quick-pad button{min-width:0;min-height:42px;padding:6px;font-size:17px;font-weight:700}
 }
+
+@media(max-width:650px){
+  .quick-pad,.quick-pad button{touch-action:manipulation}
+}
+
+@media(max-width:650px){
+  #board,.cell,.domino,.bar,.controls,.quick,.quick-pad,.quick-pad button,.stats,.help{
+    -webkit-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
+  }
+  #board,.cell,.quick-pad,.quick-pad button{
+    -webkit-tap-highlight-color:transparent;
+  }
+  .manual-grid input{
+    -webkit-user-select:text;
+    user-select:text;
+    -webkit-touch-callout:default;
+  }
+}
 </style>
 </head>
 <body>
@@ -145,7 +165,7 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
 let MAX=6, N=7, R=7, C=8, TOTAL=28;
 const board=document.querySelector("#board"), msg=document.querySelector("#message");
 let grid=[], solution=[], paired=new Map(), blocked=new Set(), selected=null, history=[], future=[];
-let moves=0, seconds=0, timer=null, showing=false, dragStart=null, dragging=false, quick=[], quickDigit=n=>{if(n<0||n>MAX)return;quick.push(n);if(quick.length>2)quick=quick.slice(-2);runQuickCheck()}, renderQuickPad=()=>{const pad=document.querySelector("#quickPad");if(!pad)return;pad.innerHTML="";for(let n=0;n<=MAX;n++){const b=document.createElement("button");b.type="button";b.textContent=n;b.onclick=()=>quickDigit(n);pad.appendChild(b)}}, tentative=new Set(), solving=false, solverGuesses=[], guessStyles=new Map();
+let moves=0, seconds=0, timer=null, showing=false, dragStart=null, dragging=false, quick=[], quickDigit=n=>{if(n<0||n>MAX)return;quick.push(n);if(quick.length>2)quick=quick.slice(-2);runQuickCheck()}, renderQuickPad=()=>{const pad=document.querySelector("#quickPad");if(!pad)return;pad.innerHTML="";for(let n=0;n<=MAX;n++){const b=document.createElement("button");b.type="button";b.textContent=n;b.onclick=()=>quickDigit(n);b.ondblclick=e=>e.preventDefault();pad.appendChild(b)}}, tentative=new Set(), solving=false, solverGuesses=[], guessStyles=new Map();
 
 const id=(r,c)=>r*C+c, rc=i=>[Math.floor(i/C),i%C], edge=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
 const adjacent=(a,b)=>{let [r1,c1]=rc(a),[r2,c2]=rc(b);return Math.abs(r1-r2)+Math.abs(c1-c2)===1};
@@ -685,6 +705,10 @@ function gapFromPoint(x,y){
  return null;
 }
 board.addEventListener("dblclick",e=>{if(e.target.closest(".cell"))return;let g=gapFromPoint(e.clientX,e.clientY);if(g)toggleBlock(g[0],g[1])});
+document.addEventListener("selectstart",e=>{
+  if(e.target.closest("input,textarea,select"))return;
+  if(e.target.closest("#board,.controls,.quick,.quick-pad,.stats,.help"))e.preventDefault();
+});
 let lastGapTap={time:0,key:""};
 board.addEventListener("pointerup",e=>{
   if(e.pointerType!=="touch" || e.target.closest(".cell"))return;
