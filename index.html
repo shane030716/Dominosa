@@ -61,6 +61,39 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
 .shortcuts b{color:#333}.shortcuts span{white-space:nowrap}
 .shortcuts kbd{display:inline-block;min-width:20px;padding:2px 5px;margin-right:2px;border:1px solid #c7cbd1;border-bottom-width:2px;border-radius:5px;background:#f6f7f8;color:#222;font:600 11px/1.2 system-ui;text-align:center}
 @media(max-width:600px){.shortcuts{gap:6px 10px;font-size:11px;margin-bottom:9px}.shortcuts kbd{min-width:18px;padding:2px 4px;font-size:10px}}
+
+/* Mobile layout */
+@media(max-width:650px){
+  :root{--gap:4px}
+  body{overscroll-behavior-y:contain}
+  .app{padding:10px}
+  .top{gap:9px}
+  h1{font-size:25px}
+  .sub{font-size:13px}
+  .stats{width:100%;gap:5px}
+  .pill{flex:1;text-align:center;padding:6px 5px;font-size:12px;min-width:0}
+  .controls{gap:6px;margin:10px 0}
+  button,select,.toggle{min-height:44px;padding:9px 10px;font-size:14px}
+  #size,#difficulty{flex:1;min-width:0}
+  #new{flex:1}
+  .toggle{justify-content:center}
+  .quick{font-size:13px;margin-bottom:9px;padding:8px 10px}
+  .quick span{display:block;margin-top:3px}
+  .shortcuts{display:none}
+  .board-wrap{padding:6px;overflow:hidden;border-radius:10px}
+  .cell{font-size:clamp(17px,5.5vw,23px);border-radius:6px}
+  .domino{border-width:3px;border-radius:8px}
+  .help{font-size:13px}
+  .card{width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;padding:14px}
+  .manual-grid{gap:3px}
+  .manual-grid input{min-height:38px;padding:4px 0;font-size:16px}
+  .win-banner{width:min(88vw,360px);padding:16px 18px}
+}
+@media(max-width:390px){
+  .controls button{flex:1 1 calc(33.333% - 6px)}
+  .controls .toggle{flex:1 1 auto}
+  .help{font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -90,7 +123,7 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
   <div class="help">
     <b>How to play:</b> Pair adjacent cells so every unordered pair 0–0 through 6–6 is used exactly once.
     Drag from one cell to an adjacent cell to confirm a domino. Clicking two adjacent cells makes a grey tentative domino, indicating it is not confirmed.
-    Double-click the gap between two cells to add/remove a gray bar, meaning those cells cannot be paired. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
+    Double-click the gap between two cells to add/remove a gray bar; on touch screens, double-tap the gap. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
     <kbd>Ctrl/Cmd+Z</kbd> undo, <kbd>Ctrl/Cmd+Y</kbd> redo.
     <b>Auto Assist:</b> Quick Check automatically connects a domino when only one location remains; when you create either a confirmed or grey tentative domino, all other adjacent occurrences of the same number pair are automatically barred. <b>Solve:</b> works step-by-step using two basic rules plus two L/T/cross rules: a cell with one open side; a number pair with only one possible location; shared-centre elimination; and reserved-pair elimination. When those rules are stuck, Solve scans from the top-left for the first unsolved cell whose only open sides are right and bottom, guesses right first, and keeps solving. If that branch causes a contradiction, it returns to that guess and tries bottom. If it gets stuck again, it makes the next guess the same way.
   </div>
@@ -151,6 +184,7 @@ function countSolutions(limit=2){
 function configureSize(){
  MAX=Number(document.querySelector("#size").value); N=MAX+1; TOTAL=N*(N+1)/2;
  const dims={3:[4,5],4:[5,6],5:[6,7],6:[7,8],7:[8,9],8:[9,10],9:[10,11]}; [R,C]=dims[MAX];
+ document.querySelector("#manualGrid").style.gridTemplateColumns=`repeat(${C},minmax(0,1fr))`;
  document.querySelector("#maxLabel").textContent=`${MAX}–${MAX}`;
  document.querySelector("#pairs").textContent=`0/${TOTAL}`;
  if(typeof mg!=="undefined"){
@@ -547,7 +581,17 @@ function cellClick(i){
 }
 function duplicateKeys(){let counts={};for(let [a,b] of paired)if(a<b){let k=pairKey(a,b);counts[k]=(counts[k]||0)+1}return new Set(Object.keys(counts).filter(k=>counts[k]>1))}
 function render(){
-  const gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gap")), cell=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+  const root=document.documentElement;
+  const wrap=document.querySelector(".board-wrap");
+  const gap=parseInt(getComputedStyle(root).getPropertyValue("--gap"));
+  if(window.innerWidth<=650){
+    const available=Math.max(250,wrap.clientWidth-12);
+    const fitted=Math.floor((available-(C-1)*gap)/C);
+    root.style.setProperty("--cell",Math.max(25,Math.min(44,fitted))+"px");
+  }else{
+    root.style.setProperty("--cell","64px");
+  }
+  const cell=parseInt(getComputedStyle(root).getPropertyValue("--cell"));
   board.style.width=(C*cell+(C-1)*gap)+"px";board.style.height=(R*cell+(R-1)*gap)+"px";board.innerHTML="";
   let dups=duplicateKeys();
   grid.forEach((v,i)=>{let [r,c]=rc(i),el=document.createElement("div");el.className="cell";el.textContent=v;el.style.left=c*(cell+gap)+"px";el.style.top=r*(cell+gap)+"px";
@@ -562,8 +606,8 @@ function render(){
     if(paired.has(i)&&dups.has(pairKey(i,paired.get(i))))el.classList.add("duplicate");
     el.dataset.index=i;
     el.onclick=()=>{if(!dragging)cellClick(i)};
-    el.onpointerdown=e=>{if(e.button!==0)return;dragStart=i;dragging=false;el.setPointerCapture?.(e.pointerId)};
-    el.onpointermove=e=>{if(dragStart!==null)dragging=true};
+    el.onpointerdown=e=>{if(e.button!==0)return;dragStart=i;dragging=false;el._dragX=e.clientX;el._dragY=e.clientY;el.setPointerCapture?.(e.pointerId)};
+    el.onpointermove=e=>{if(dragStart!==null&&Math.hypot(e.clientX-(el._dragX||e.clientX),e.clientY-(el._dragY||e.clientY))>8)dragging=true};
     el.onpointerup=e=>{if(dragStart===null)return;let target=document.elementFromPoint(e.clientX,e.clientY)?.closest(".cell");let j=target?Number(target.dataset.index):i;let a=dragStart;dragStart=null;if(dragging&&adjacent(a,j)){if(paired.get(a)===j)removePair(a);else if(!paired.has(a)&&!paired.has(j)&&!blocked.has(edge(a,j)))makePair(a,j)}setTimeout(()=>dragging=false,0)};
     board.appendChild(el)});
   let drawn=new Set();
@@ -633,6 +677,20 @@ function gapFromPoint(x,y){
  return null;
 }
 board.addEventListener("dblclick",e=>{if(e.target.closest(".cell"))return;let g=gapFromPoint(e.clientX,e.clientY);if(g)toggleBlock(g[0],g[1])});
+let lastGapTap={time:0,key:""};
+board.addEventListener("pointerup",e=>{
+  if(e.pointerType!=="touch" || e.target.closest(".cell"))return;
+  const g=gapFromPoint(e.clientX,e.clientY);
+  if(!g)return;
+  const key=edge(g[0],g[1]), now=Date.now();
+  if(lastGapTap.key===key && now-lastGapTap.time<450){
+    e.preventDefault();
+    toggleBlock(g[0],g[1]);
+    lastGapTap={time:0,key:""};
+  }else{
+    lastGapTap={time:now,key};
+  }
+});
 
 function runQuickCheck(){
  document.querySelector("#quickNums").textContent=quick.join(", ");
