@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dominosa</title>
+<style>
+:root{--cell:64px;--gap:8px;--ink:#17202a;--muted:#667085;--panel:#fff;--bg:#f3f5f7;--accent:#1f6feb;--bad:#c62828;--good:#198754}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.app{max-width:900px;margin:auto;padding:22px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{margin:0;font-size:30px}.sub{color:var(--muted);margin-top:3px}.stats{display:flex;gap:10px;flex-wrap:wrap}
+.pill{background:#fff;border:1px solid #d8dee6;border-radius:10px;padding:8px 12px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
+.toggle{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #cbd3dc;border-radius:8px;padding:8px 11px;cursor:pointer}
+.toggle input{width:17px;height:17px;margin:0;accent-color:var(--accent)}
+button,select{font:inherit;border:1px solid #cbd3dc;background:white;border-radius:8px;padding:9px 12px;cursor:pointer}
+button:hover{background:#f8fafc}.primary{background:var(--accent);color:white;border-color:var(--accent)}.primary:hover{filter:brightness(.96);background:var(--accent)}
+.board-wrap{background:white;border:1px solid #d8dee6;border-radius:14px;padding:18px;overflow:auto;box-shadow:0 2px 8px #0000000b}
+#board{position:relative;margin:auto;user-select:none;touch-action:none}
+.cell{position:absolute;width:var(--cell);height:var(--cell);display:grid;place-items:center;background:#fff;border:2px solid #cbd3dc;border-radius:8px;font-size:27px;font-weight:700;cursor:pointer;transition:.12s}
+.cell:hover{border-color:#8aa4c5}.cell.selected{outline:4px solid #8dbbff;z-index:3}.cell.paired{background:#202936;color:white;border-color:#202936}
+.cell.tentative{background:#8a929c;color:white;border-color:#737b85}
+.cell.guess-h{background:#b9bec5!important;color:white!important;border-color:#a3a9b1!important}
+.cell.guess-v{background:#5f6670!important;color:white!important;border-color:#4c535c!important}
+.cell.dead{background:#f28c28!important;color:white!important;border-color:#c7650b!important;animation:deadPulse .32s 3 alternate}
+@keyframes deadPulse{to{transform:scale(.94);box-shadow:inset 0 0 0 4px #ffbf69}}
+.cell.duplicate{background:var(--bad);border-color:var(--bad)}.cell.hint{animation:flash .14s 4 alternate}
+.domino{position:absolute;border:4px solid #111;border-radius:11px;pointer-events:none;z-index:2}
+.solution{border-color:var(--good)!important}.xmark{position:absolute;z-index:4;pointer-events:none;color:#9aa3ad;font-weight:900;font-size:18px;transform:translate(-50%,-50%)}
+@keyframes flash{to{background:#ffe08a}}
+.cell.quick-red{animation:flashRed .14s 4 alternate}
+.cell.quick-green{animation:flashGreen .14s 4 alternate}
+.cell.quick-blue{animation:flashBlue .14s 4 alternate}
+@keyframes flashRed{to{background:#e53935;color:white;border-color:#b71c1c}}
+@keyframes flashGreen{to{background:#2eaf62;color:white;border-color:#18763d}}
+@keyframes flashBlue{to{background:#2583e8;color:white;border-color:#125ba8}}
+.cell.logic1-purple{animation:logic1Purple .14s 4 alternate}
+@keyframes logic1Purple{to{background:#8B5CF6;color:white;border-color:#6D3FD1}}
+.win-pop{animation:winPop .65s cubic-bezier(.2,.9,.25,1.25)}
+@keyframes winPop{0%{transform:scale(1)}45%{transform:scale(1.035)}100%{transform:scale(1)}}
+.confetti{position:fixed;top:-24px;width:10px;height:18px;border-radius:2px;z-index:100;pointer-events:none;animation:confettiFall var(--dur) cubic-bezier(.15,.65,.35,1) forwards}
+@keyframes confettiFall{
+  0%{transform:translate3d(0,-20px,0) rotate(0deg);opacity:1}
+  100%{transform:translate3d(var(--drift),105vh,0) rotate(var(--spin));opacity:.9}
+}
+.win-banner{position:fixed;left:50%;top:43%;transform:translate(-50%,-50%) scale(.5);z-index:101;
+ background:#fff;border:2px solid #d8dee6;border-radius:18px;padding:18px 30px;text-align:center;
+ box-shadow:0 18px 60px #0004;pointer-events:none;opacity:0;animation:bannerIn 2.5s ease forwards}
+.win-banner b{display:block;font-size:32px}.win-banner span{color:#667085;font-weight:650}
+@keyframes bannerIn{0%{opacity:0;transform:translate(-50%,-50%) scale(.5)}12%,72%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-55%) scale(.96)}}
+.message{min-height:26px;margin:12px 2px 0;font-weight:650}.message.bad{color:var(--bad)}.message.good{color:var(--good)}
+.quick{margin:0 0 14px;background:#fff;border:1px solid #d8dee6;border-radius:9px;padding:9px 12px;color:#475467;font-size:14px}.quick b{color:#17202a;margin-right:8px}
+.help{margin-top:16px;color:#475467;font-size:14px;line-height:1.55}
+kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
+.modal{position:fixed;inset:0;background:#0008;display:none;place-items:center;z-index:20}.modal.show{display:grid}
+.card{width:min(520px,92vw);background:white;border-radius:14px;padding:20px}.manual-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;margin:15px 0}
+.manual-grid input{width:100%;min-width:0;text-align:center;font:inherit;padding:7px 2px}
+@media(max-width:650px){:root{--cell:44px;--gap:5px}.app{padding:12px}.board-wrap{padding:10px}.cell{font-size:21px;border-radius:6px}}
+
+.shortcuts{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:7px 13px;margin:7px auto 12px;font-size:12px;color:#59616d}
+.shortcuts b{color:#333}.shortcuts span{white-space:nowrap}
+.shortcuts kbd{display:inline-block;min-width:20px;padding:2px 5px;margin-right:2px;border:1px solid #c7cbd1;border-bottom-width:2px;border-radius:5px;background:#f6f7f8;color:#222;font:600 11px/1.2 system-ui;text-align:center}
+@media(max-width:600px){.shortcuts{gap:6px 10px;font-size:11px;margin-bottom:9px}.shortcuts kbd{min-width:18px;padding:2px 4px;font-size:10px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div><h1>Dominosa</h1><div class="sub">Use every domino from 0–0 through <span id="maxLabel">6–6</span> exactly once.</div></div>
+    <div class="stats"><div class="pill">Time <b id="time">00:00</b></div><div class="pill">Moves <b id="moves">0</b></div><div class="pill">Pairs <b id="pairs">0/28</b></div></div>
+  </div>
+  <div class="controls">
+    <select id="size" title="Largest number"><option value="3">Max 3</option><option value="4">Max 4</option><option value="5">Max 5</option><option value="6" selected>Max 6</option><option value="7">Max 7</option><option value="8">Max 8</option><option value="9">Max 9</option></select><select id="difficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select>
+    <button class="primary" id="new">New Puzzle</button>
+    <label class="toggle" title="Automatically place forced dominoes and eliminate duplicate-number alternatives">
+      <input type="checkbox" id="autoAssist"> Auto Assist
+    </label>
+    <button id="undo">Undo</button><button id="redo">Redo</button><button id="clearBoard">Clear Board</button>
+    <button id="hint">Hint</button><button id="solve">Solve</button><button id="check">Check</button>
+    <button id="solution">Show Solution</button><button id="manual">Enter Manually</button>
+  </div>
+  <div class="quick">Quick Check: <b id="quickNums">—</b> <span>Type two numbers (0–9) to highlight every currently possible location.</span></div>
+  <div class="shortcuts"><b>Keyboard:</b>
+    <span><kbd>H</kbd> Hint</span><span><kbd>S</kbd> Solve</span><span><kbd>C</kbd> Check</span>
+    <span><kbd>X</kbd> Solution</span><span><kbd>E</kbd> Manual</span><span><kbd>A</kbd> Auto Assist On</span>
+    <span><kbd>O</kbd> Clear</span><span><kbd>P</kbd> New Puzzle</span>
+  </div>
+  <div class="board-wrap"><div id="board"></div></div>
+  <div id="message" class="message"></div>
+  <div class="help">
+    <b>How to play:</b> Pair adjacent cells so every unordered pair 0–0 through 6–6 is used exactly once.
+    Drag from one cell to an adjacent cell to confirm a domino. Clicking two adjacent cells makes a grey tentative domino, indicating it is not confirmed.
+    Double-click the gap between two cells to add/remove a gray bar, meaning those cells cannot be paired. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
+    <kbd>Ctrl/Cmd+Z</kbd> undo, <kbd>Ctrl/Cmd+Y</kbd> redo.
+    <b>Auto Assist:</b> Quick Check automatically connects a domino when only one location remains; when you create either a confirmed or grey tentative domino, all other adjacent occurrences of the same number pair are automatically barred. <b>Solve:</b> works step-by-step using two basic rules plus two L/T/cross rules: a cell with one open side; a number pair with only one possible location; shared-centre elimination; and reserved-pair elimination. When those rules are stuck, Solve scans from the top-left for the first unsolved cell whose only open sides are right and bottom, guesses right first, and keeps solving. If that branch causes a contradiction, it returns to that guess and tries bottom. If it gets stuck again, it makes the next guess the same way.
+  </div>
+</div>
+<div class="modal" id="manualModal"><div class="card">
+  <h2 style="margin-top:0">Enter puzzle</h2>
+  <p>Enter 56 values from 0 to 6.</p><div id="manualGrid" class="manual-grid"></div>
+  <div class="controls"><button class="primary" id="loadManual">Load</button><button id="cancelManual">Cancel</button></div>
+</div></div>
+<script>
+"use strict";
+let MAX=6, N=7, R=7, C=8, TOTAL=28;
+const board=document.querySelector("#board"), msg=document.querySelector("#message");
+let grid=[], solution=[], paired=new Map(), blocked=new Set(), selected=null, history=[], future=[];
+let moves=0, seconds=0, timer=null, showing=false, dragStart=null, dragging=false, quick=[], tentative=new Set(), solving=false, solverGuesses=[], guessStyles=new Map();
+
+const id=(r,c)=>r*C+c, rc=i=>[Math.floor(i/C),i%C], edge=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
+const adjacent=(a,b)=>{let [r1,c1]=rc(a),[r2,c2]=rc(b);return Math.abs(r1-r2)+Math.abs(c1-c2)===1};
+const pairKey=(a,b)=>{let x=grid[a],y=grid[b];return x<=y?`${x}-${y}`:`${y}-${x}`};
+
+function neighbors(i){let [r,c]=rc(i),a=[]; if(r)a.push(id(r-1,c));if(r<R-1)a.push(id(r+1,c));if(c)a.push(id(r,c-1));if(c<C-1)a.push(id(r,c+1));return a}
+function randomTiling(){
+  let used=Array(R*C).fill(false), out=[];
+  function dfs(){
+    let best=-1, opts=null;
+    for(let i=0;i<R*C;i++) if(!used[i]){
+      let o=neighbors(i).filter(j=>!used[j]);
+      if(!o.length)return false;
+      if(!opts||o.length<opts.length){best=i;opts=o;if(o.length===1)break}
+    }
+    if(best<0)return true;
+    opts.sort(()=>Math.random()-.5);
+    for(let j of opts){used[best]=used[j]=true;out.push([best,j]);if(dfs())return true;out.pop();used[best]=used[j]=false}
+    return false;
+  }
+  return dfs()?out:null;
+}
+function dominoes(){let a=[];for(let x=0;x<N;x++)for(let y=x;y<N;y++)a.push([x,y]);return a}
+function shuffle(a){for(let i=a.length-1;i;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function countSolutions(limit=2){
+  let usedCells=Array(R*C).fill(false), usedPairs=new Set(), count=0;
+  function dfs(){
+    if(count>=limit)return;
+    let best=-1,opts=null;
+    for(let i=0;i<R*C;i++)if(!usedCells[i]){
+      let o=neighbors(i).filter(j=>!usedCells[j]&&!usedPairs.has(pairKey(i,j)));
+      if(!o.length)return;
+      if(!opts||o.length<opts.length){best=i;opts=o;if(o.length===1)break}
+    }
+    if(best<0){count++;return}
+    for(let j of opts){
+      let k=pairKey(best,j);usedCells[best]=usedCells[j]=true;usedPairs.add(k);
+      dfs();usedPairs.delete(k);usedCells[best]=usedCells[j]=false;
+      if(count>=limit)return;
+    }
+  } dfs(); return count;
+}
+function configureSize(){
+ MAX=Number(document.querySelector("#size").value); N=MAX+1; TOTAL=N*(N+1)/2;
+ const dims={3:[4,5],4:[5,6],5:[6,7],6:[7,8],7:[8,9],8:[9,10],9:[10,11]}; [R,C]=dims[MAX];
+ document.querySelector("#maxLabel").textContent=`${MAX}–${MAX}`;
+ document.querySelector("#pairs").textContent=`0/${TOTAL}`;
+ if(typeof mg!=="undefined"){
+   mg.innerHTML="";
+   for(let i=0;i<R*C;i++){
+     let x=document.createElement("input");
+     x.type="number";x.min=0;x.max=MAX;x.inputMode="numeric";
+     x.addEventListener("input",()=>{
+       if(x.value!=="" && Number.isInteger(Number(x.value)) && Number(x.value)>=0 && Number(x.value)<=MAX){
+         const inputs=[...mg.querySelectorAll("input")];
+         const next=inputs[i+1];
+         if(next){next.focus();next.select();}
+       }
+     });
+     mg.appendChild(x);
+   }
+ }
+}
+function generate(){
+  configureSize();
+  setMessage("Generating puzzle…"); clearInterval(timer);
+  setTimeout(()=>{
+    let tries=0, desired=document.querySelector("#difficulty").value, accepted=false;
+    while(tries++<1200&&!accepted){
+      let t=randomTiling(); if(!t)continue;
+      let ds=shuffle(dominoes()), g=Array(R*C);
+      t.forEach((p,k)=>{let d=ds[k];if(Math.random()<.5)d=[d[1],d[0]];g[p[0]]=d[0];g[p[1]]=d[1]});
+      grid=g; solution=t;
+      // Every generated puzzle must have exactly one valid solution.
+      // Difficulty never changes the uniqueness requirement.
+      let n=countSolutions(2);
+      accepted = (n===1);
+    }
+    if(!accepted){
+      setMessage("Could not generate a unique puzzle. Please try New Puzzle again.","bad");
+      return;
+    }
+    resetPlay(); render(); startTimer(); setMessage("");
+  },20);
+}
+function resetPlay(){paired.clear();blocked.clear();tentative.clear();guessStyles.clear();selected=null;history=[];future=[];moves=0;seconds=0;showing=false;updateStats()}
+function snapshot(){return {paired:[...paired],blocked:[...blocked],tentative:[...tentative],guessStyles:[...guessStyles],moves}}
+function restore(s){paired=new Map(s.paired);blocked=new Set(s.blocked);tentative=new Set(s.tentative||[]);guessStyles=new Map(s.guessStyles||[]);moves=s.moves;selected=null;render()}
+function act(fn){history.push(snapshot());future=[];fn();moves++;render()}
+function makePair(a,b,isTentative=false){
+  if(!adjacent(a,b)||paired.has(a)||paired.has(b)||blocked.has(edge(a,b)))return;
+  act(()=>{
+    paired.set(a,b);paired.set(b,a);
+    if(isTentative) tentative.add(edge(a,b)); else tentative.delete(edge(a,b));
+    // Auto Assist eliminates other occurrences for both confirmed
+    // and tentative (grey) dominoes.
+    addDuplicateBarsFor(a,b);
+  });
+  selected=null;
+  if(!isTentative) checkComplete();
+}
+function removePair(a){if(!paired.has(a))return;let b=paired.get(a);act(()=>{tentative.delete(edge(a,b));guessStyles.delete(edge(a,b));paired.delete(a);paired.delete(b)})}
+function toggleBlock(a,b){if(!adjacent(a,b)||paired.has(a)||paired.has(b))return;act(()=>{let e=edge(a,b);blocked.has(e)?blocked.delete(e):blocked.add(e)})}
+function autoAssistOn(){return document.querySelector("#autoAssist").checked}
+function addDuplicateBarsFor(a,b){
+  if(!autoAssistOn()) return;
+  const k=pairKey(a,b);
+  // Once domino a-b is used, no other adjacent cells with the same unordered
+  // number pair can be that domino. Mark every such still-open edge impossible.
+  for(let i=0;i<R*C;i++){
+    for(let j of neighbors(i)){
+      if(i>=j || (i===a&&j===b) || (i===b&&j===a)) continue;
+      if(paired.has(i) || paired.has(j)) continue;
+      if(pairKey(i,j)===k) blocked.add(edge(i,j));
+    }
+  }
+}
+
+function addDuplicateBarsForced(a,b){
+  const k=pairKey(a,b);
+  for(let i=0;i<R*C;i++){
+    for(let j of neighbors(i)){
+      if(i>=j || edge(i,j)===edge(a,b)) continue;
+      if(paired.has(i) || paired.has(j)) continue;
+      if(pairKey(i,j)===k) blocked.add(edge(i,j));
+    }
+  }
+}
+function openNeighbors(i){
+  if(paired.has(i)) return [];
+  return neighbors(i).filter(j=>!paired.has(j)&&!blocked.has(edge(i,j)));
+}
+function usedNumberPairs(){
+  const used=new Set();
+  for(let [a,b] of paired) if(a<b) used.add(pairKey(a,b));
+  return used;
+}
+function solverPair(a,b,reason,flash="blue"){
+  if(paired.has(a)||paired.has(b)||blocked.has(edge(a,b))) return false;
+  act(()=>{
+    paired.set(a,b); paired.set(b,a);
+    tentative.delete(edge(a,b));
+    addDuplicateBarsForced(a,b);
+  });
+  selected=null;
+  const e1=board.querySelector(`.cell[data-index="${a}"]`);
+  const e2=board.querySelector(`.cell[data-index="${b}"]`);
+  const cls=flash==="purple"?"logic1-purple":"quick-blue";
+  e1?.classList.add(cls); e2?.classList.add(cls);
+  setMessage(reason,"good");
+  checkComplete();
+  return true;
+}
+
+function duplicatePairCells(){
+  const seen=new Map(), bad=new Set();
+  for(let [a,b] of paired){
+    if(a>b) continue;
+    const k=pairKey(a,b);
+    if(seen.has(k)){
+      const [x,y]=seen.get(k);
+      bad.add(x); bad.add(y); bad.add(a); bad.add(b);
+    } else seen.set(k,[a,b]);
+  }
+  return [...bad];
+}
+function deadCells(){
+  const bad=[];
+  for(let i=0;i<R*C;i++){
+    if(paired.has(i)) continue;
+    if(openNeighbors(i).length===0) bad.push(i);
+  }
+  return bad;
+}
+function showDeadCells(cells){
+  for(const i of cells){
+    board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("dead");
+  }
+}
+function solverContradiction(){
+  const dup=duplicatePairCells();
+  if(dup.length){
+    // render() already marks duplicate connected dominoes red.
+    render();
+    setMessage("Stopped: the same number tile has been connected more than once. Undo your guess and try again.","bad");
+    return true;
+  }
+  const dead=deadCells();
+  if(dead.length){
+    render();
+    showDeadCells(dead);
+    setMessage("Stopped: an unpaired cell is blocked on all four sides. Undo your guess and try again.","bad");
+    return true;
+  }
+  return false;
+}
+
+function addBarsAnimated(edges,reason){
+  const fresh=[...new Set(edges)].filter(e=>!blocked.has(e));
+  if(!fresh.length) return false;
+  act(()=>{ for(const e of fresh) blocked.add(e); });
+  selected=null;
+  setMessage(reason,"good");
+  render();
+  return true;
+}
+
+// L/T/CROSS RULE 2 — RESERVED PAIR:
+// If one cell's remaining possible partners are all the same number,
+// that number-pair must occur in this cluster. Keep the cluster choices
+// open, but bar every other occurrence of that number-pair elsewhere. Since the centre
+// cell MUST pair with one of those same-number neighbours, the unique A-B
+// domino must occur inside this cluster. Bar every other A-B adjacency elsewhere.
+
+// L/T/CROSS RULE 1 — SHARED CENTRE:
+// For an unused A-B domino, if all remaining A-B possibilities in the
+// pattern share one centre cell, that centre MUST take one of those A-B
+// edges. Bar the centre's other connections to different numbers.
+// Example: if 1-2 can only be above or left of the same 1, bar 1-6.
+//
+function findSharedEndpointPairBars(){
+  const used=usedNumberPairs();
+
+  for(let a=0;a<=MAX;a++){
+    for(let b=a;b<=MAX;b++){
+      const key=a+"-"+b;
+      if(used.has(key)) continue;
+
+      const possibilities=[];
+      for(let i=0;i<R*C;i++){
+        if(paired.has(i)) continue;
+        for(const j of openNeighbors(i)){
+          if(i>=j) continue;
+          if(pairKey(i,j)===key) possibilities.push([i,j]);
+        }
+      }
+
+      // This deduction is for an L/T/cross: at least two possible placements.
+      if(possibilities.length<2) continue;
+
+      let common=new Set(possibilities[0]);
+      for(const [x,y] of possibilities){
+        common=new Set([...common].filter(v=>v===x||v===y));
+      }
+      if(common.size!==1) continue;
+
+      const c=[...common][0];
+      const clusterEdges=new Set(possibilities.map(([x,y])=>edge(x,y)));
+      const bars=[];
+      for(const n of openNeighbors(c)){
+        const e=edge(c,n);
+        if(!clusterEdges.has(e)) bars.push(e);
+      }
+
+      const fresh=[...new Set(bars)].filter(e=>!blocked.has(e));
+      if(fresh.length) return {edges:fresh,a,b,c};
+    }
+  }
+  return null;
+}
+
+function findReservedPairBars(){
+  for(let c=0;c<R*C;c++){
+    if(paired.has(c)) continue;
+    const opts=openNeighbors(c);
+    if(opts.length<2) continue;
+    const b=grid[opts[0]], a=grid[c];
+    if(!opts.every(x=>grid[x]===b)) continue;
+
+    const inside=new Set(opts.map(x=>edge(c,x)));
+    const bars=[];
+    for(let i=0;i<R*C;i++){
+      if(paired.has(i)) continue;
+      for(const j of openNeighbors(i)){
+        if(i>=j) continue;
+        const e=edge(i,j);
+        if(inside.has(e)) continue;
+        if(pairKey(i,j)===([a,b].sort((x,y)=>x-y).join("-"))) bars.push(e);
+      }
+    }
+    const fresh=[...new Set(bars)].filter(e=>!blocked.has(e));
+    if(fresh.length) return {edges:fresh,a,b};
+  }
+  return null;
+}
+
+function findThreeSidesBlocked(){
+  // Boundary edges, bars, and cells already occupied by another tile all count
+  // as closed sides. Exactly one legal neighboring cell means this tile is forced.
+  for(let i=0;i<R*C;i++){
+    if(paired.has(i)) continue;
+    const o=openNeighbors(i);
+    if(o.length===1) return [i,o[0]];
+  }
+  return null;
+}
+function findUniqueNumberPair(){
+  const used=usedNumberPairs(), places=new Map();
+  for(let i=0;i<R*C;i++){
+    if(paired.has(i)) continue;
+    for(let j of openNeighbors(i)){
+      if(i>=j) continue;
+      const k=pairKey(i,j);
+      if(used.has(k)) continue;
+      if(!places.has(k)) places.set(k,[]);
+      places.get(k).push([i,j]);
+    }
+  }
+  for(const [k,p] of places) if(p.length===1) return [p[0][0],p[0][1],k];
+  return null;
+}
+
+function findGuessCell(){
+  // Scan row-major: top row left-to-right, then the next row.
+  // Only guess a cell whose remaining choices are exactly RIGHT and BOTTOM.
+  for(let i=0;i<R*C;i++){
+    if(paired.has(i)) continue;
+    const [r,c]=rc(i);
+    const right=c<C-1?id(r,c+1):-1;
+    const bottom=r<R-1?id(r+1,c):-1;
+    const o=openNeighbors(i);
+    if(o.length===2 && right>=0 && bottom>=0 && o.includes(right) && o.includes(bottom)){
+      return {cell:i,right,bottom};
+    }
+  }
+  return null;
+}
+function solverSnapshot(){
+  return snapshot();
+}
+function restoreSolverSnapshot(snap){
+  restore(snap);
+}
+async function makeSolverGuess(g,side){
+  const target=side==="right"?g.right:g.bottom;
+  solverPair(g.cell,target,
+    `Guess: trying the ${side} side first.`);
+  guessStyles.set(edge(g.cell,target),side==="right"?"h":"v");
+  render();
+  await new Promise(r=>setTimeout(r,520));
+}
+async function backtrackSolverGuess(){
+  // Work backward through guesses until one still has its bottom branch untried.
+  while(solverGuesses.length){
+    const g=solverGuesses.pop();
+    restoreSolverSnapshot(g.before);
+    await new Promise(r=>setTimeout(r,350));
+
+    if(!g.triedBottom){
+      g.triedBottom=true;
+      solverGuesses.push(g);
+      setMessage("Contradiction found. Undoing to the last guess and trying the bottom side.","bad");
+      await new Promise(r=>setTimeout(r,520));
+      await makeSolverGuess(g,"bottom");
+      return true;
+    }
+    // Both branches of this guess failed; continue back to the previous guess.
+  }
+  return false;
+}
+async function solveByLogic(){
+  if(solving) return;
+  solving=true;
+  solverGuesses=[];
+  const btn=document.querySelector("#solve");
+  btn.disabled=true; btn.textContent="Solving…";
+  let made=0;
+  try{
+    while(true){
+      if(solverContradiction()){
+        await new Promise(r=>setTimeout(r,650));
+        if(await backtrackSolverGuess()) continue;
+        setMessage("Solver reached a contradiction and has no earlier guess left to try.","bad");
+        break;
+      }
+
+      let forced=findThreeSidesBlocked();
+      if(forced){
+        const [a,b]=forced;
+        solverPair(a,b,"Forced tile: one cell has only one open side.","purple");
+        made++;
+        await new Promise(r=>setTimeout(r,520));
+        continue;
+      }
+
+      let unique=findUniqueNumberPair();
+      if(unique){
+        const [a,b,k]=unique;
+        solverPair(a,b,`Forced ${k}: those two numbers have only one possible location.`);
+        made++;
+        await new Promise(r=>setTimeout(r,520));
+        continue;
+      }
+
+      // L/T/CROSS RULE 1 — shared centre.
+      const shared=findSharedEndpointPairBars();
+      if(shared){
+        addBarsAnimated(shared.edges,
+          `L/T/cross rule 1: ${shared.a}-${shared.b} must use this shared cell. Barred that cell's other connections.`);
+        made++;
+        await new Promise(r=>setTimeout(r,520));
+        continue;
+      }
+
+      // L/T/CROSS RULE 2 — reserved pair.
+      const reserved=findReservedPairBars();
+      if(reserved){
+        addBarsAnimated(reserved.edges,
+          `L/T/cross rule 2: ${reserved.a}-${reserved.b} is reserved for this cluster. Barred other ${reserved.a}-${reserved.b} locations.`);
+        made++;
+        await new Promise(r=>setTimeout(r,520));
+        continue;
+      }
+
+      if(paired.size===R*C) break;
+
+      // No logical deduction remains: make the requested controlled guess.
+      const g=findGuessCell();
+      if(!g){
+        setMessage("Solver is stuck and cannot find an unsolved cell with only right and bottom open.");
+        break;
+      }
+      const branch={...g,before:solverSnapshot(),triedBottom:false};
+      solverGuesses.push(branch);
+      setMessage("Logic is stuck. Guessing the first eligible cell from the top-left, trying right first.");
+      await new Promise(r=>setTimeout(r,520));
+      await makeSolverGuess(branch,"right");
+      made++;
+    }
+  } finally {
+    solving=false; btn.disabled=false; btn.textContent="Solve";
+  }
+}
+function cellClick(i){
+  if(paired.has(i)){removePair(i);selected=null;return}
+  if(selected===null){selected=i;render();return}
+  if(selected===i){selected=null;render();return}
+  if(adjacent(selected,i)){let a=selected;selected=null;makePair(a,i,true)} else {selected=i;render()}
+}
+function duplicateKeys(){let counts={};for(let [a,b] of paired)if(a<b){let k=pairKey(a,b);counts[k]=(counts[k]||0)+1}return new Set(Object.keys(counts).filter(k=>counts[k]>1))}
+function render(){
+  const gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gap")), cell=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+  board.style.width=(C*cell+(C-1)*gap)+"px";board.style.height=(R*cell+(R-1)*gap)+"px";board.innerHTML="";
+  let dups=duplicateKeys();
+  grid.forEach((v,i)=>{let [r,c]=rc(i),el=document.createElement("div");el.className="cell";el.textContent=v;el.style.left=c*(cell+gap)+"px";el.style.top=r*(cell+gap)+"px";
+    if(selected===i)el.classList.add("selected");
+    if(paired.has(i))el.classList.add("paired");
+    if(paired.has(i)&&tentative.has(edge(i,paired.get(i))))el.classList.add("tentative");
+    if(paired.has(i)){
+      const gs=guessStyles.get(edge(i,paired.get(i)));
+      if(gs==="h")el.classList.add("guess-h");
+      if(gs==="v")el.classList.add("guess-v");
+    }
+    if(paired.has(i)&&dups.has(pairKey(i,paired.get(i))))el.classList.add("duplicate");
+    el.dataset.index=i;
+    el.onclick=()=>{if(!dragging)cellClick(i)};
+    el.onpointerdown=e=>{if(e.button!==0)return;dragStart=i;dragging=false;el.setPointerCapture?.(e.pointerId)};
+    el.onpointermove=e=>{if(dragStart!==null)dragging=true};
+    el.onpointerup=e=>{if(dragStart===null)return;let target=document.elementFromPoint(e.clientX,e.clientY)?.closest(".cell");let j=target?Number(target.dataset.index):i;let a=dragStart;dragStart=null;if(dragging&&adjacent(a,j)){if(paired.get(a)===j)removePair(a);else if(!paired.has(a)&&!paired.has(j)&&!blocked.has(edge(a,j)))makePair(a,j)}setTimeout(()=>dragging=false,0)};
+    board.appendChild(el)});
+  let drawn=new Set();
+  for(let [a,b] of paired){let e=edge(a,b);if(drawn.has(e))continue;drawn.add(e);drawOutline(a,b,showing&&isSolutionEdge(a,b),tentative.has(e))}
+  for(let e of blocked){let [a,b]=e.split("-").map(Number);drawBar(a,b)}
+  if(showing)for(let [a,b] of solution)if(!paired.has(a))drawOutline(a,b,true);
+  updateStats();
+}
+function drawOutline(a,b,sol=false,isTentative=false){
+  let [r1,c1]=rc(a),[r2,c2]=rc(b),gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gap")),cell=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+  let el=document.createElement("div");el.className="domino"+(sol?" solution":"");if(isTentative)el.style.borderColor="#737b85";
+   const gs=guessStyles.get(edge(a,b));
+   if(gs==="h")el.style.borderColor="#a3a9b1";
+   if(gs==="v")el.style.borderColor="#4c535c";
+  let x=Math.min(c1,c2)*(cell+gap)-3,y=Math.min(r1,r2)*(cell+gap)-3;
+  el.style.left=x+"px";el.style.top=y+"px";
+  el.style.width=(c1===c2?cell+6:cell*2+gap+6)+"px";el.style.height=(r1===r2?cell+6:cell*2+gap+6)+"px";board.appendChild(el)
+}
+function drawBar(a,b){let [r1,c1]=rc(a),[r2,c2]=rc(b),gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gap")),cell=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+ let el=document.createElement("div");el.className="xmark";el.textContent="";
+ let cx=(c1+c2)/2*(cell+gap)+cell/2, cy=(r1+r2)/2*(cell+gap)+cell/2;
+ el.style.left=cx+"px";el.style.top=cy+"px";el.style.background="#7d8793";el.style.borderRadius="3px";
+ if(r1===r2){el.style.width="6px";el.style.height=(cell*.65)+"px"}else{el.style.width=(cell*.65)+"px";el.style.height="6px"}
+ board.appendChild(el)}
+function isSolutionEdge(a,b){return solution.some(p=>edge(...p)===edge(a,b))}
+function celebrateWin(){
+  document.querySelector(".board-wrap").classList.remove("win-pop");
+  void document.querySelector(".board-wrap").offsetWidth;
+  document.querySelector(".board-wrap").classList.add("win-pop");
+
+  // Confetti uses a bright rotating palette and random trajectories.
+  const colors=["#1f6feb","#2eaf62","#f2c94c","#e94b5f","#9b51e0","#f2994a"];
+  for(let i=0;i<90;i++){
+    const c=document.createElement("i");
+    c.className="confetti";
+    c.style.left=(Math.random()*100)+"vw";
+    c.style.background=colors[i%colors.length];
+    c.style.setProperty("--dur",(1.8+Math.random()*1.8)+"s");
+    c.style.setProperty("--drift",(-140+Math.random()*280)+"px");
+    c.style.setProperty("--spin",(-900+Math.random()*1800)+"deg");
+    c.style.animationDelay=(Math.random()*.55)+"s";
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(),4200);
+  }
+
+  const banner=document.createElement("div");
+  banner.className="win-banner";
+  banner.innerHTML=`<b>🎉 Solved!</b><span>${document.querySelector("#time").textContent} · ${moves} moves</span>`;
+  document.body.appendChild(banner);
+  setTimeout(()=>banner.remove(),2700);
+}
+function checkComplete(){
+ if(paired.size!==R*C)return;
+ let keys=new Set();for(let [a,b] of paired)if(a<b)keys.add(pairKey(a,b));
+ if(keys.size===TOTAL){clearInterval(timer);setMessage("Solved! Every domino is used exactly once.","good");celebrateWin()}else setMessage("The board is full, but some dominoes are duplicated.","bad")
+}
+function updateStats(){document.querySelector("#moves").textContent=moves;document.querySelector("#pairs").textContent=`${paired.size/2}/${TOTAL}`;document.querySelector("#time").textContent=`${String(Math.floor(seconds/60)).padStart(2,"0")}:${String(seconds%60).padStart(2,"0")}`}
+function startTimer(){clearInterval(timer);timer=setInterval(()=>{seconds++;updateStats()},1000)}
+function setMessage(t,c=""){msg.textContent=t;msg.className="message "+c}
+
+function gapFromPoint(x,y){
+ const rect=board.getBoundingClientRect(), gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gap")), cell=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
+ let px=x-rect.left,py=y-rect.top,pitch=cell+gap;
+ let c=Math.floor(px/pitch),r=Math.floor(py/pitch), ox=px-c*pitch,oy=py-r*pitch;
+ if(r>=0&&r<R&&c>=0&&c<C-1&&ox>=cell){return [id(r,c),id(r,c+1)]}
+ if(r>=0&&r<R-1&&c>=0&&c<C&&oy>=cell){return [id(r,c),id(r+1,c)]}
+ return null;
+}
+board.addEventListener("dblclick",e=>{if(e.target.closest(".cell"))return;let g=gapFromPoint(e.clientX,e.clientY);if(g)toggleBlock(g[0],g[1])});
+
+function runQuickCheck(){
+ document.querySelector("#quickNums").textContent=quick.join(", ");
+ if(quick.length<2)return;
+ let a=Math.min(...quick),b=Math.max(...quick), open=[], found=[];
+
+ for(let [i,j] of paired){
+   if(i<j){
+     let x=Math.min(grid[i],grid[j]),y=Math.max(grid[i],grid[j]);
+     if(x===a&&y===b && !tentative.has(edge(i,j))) found.push([i,j]);
+   }
+ }
+
+ for(let i=0;i<R*C;i++)for(let j of neighbors(i))if(i<j&&!paired.has(i)&&!paired.has(j)&&!blocked.has(edge(i,j))){
+   let x=Math.min(grid[i],grid[j]),y=Math.max(grid[i],grid[j]);
+   if(x===a&&y===b) open.push([i,j]);
+ }
+
+ // Auto Assist: if this domino is not already used and only one legal
+ // location remains, place it immediately.
+ if(autoAssistOn() && found.length===0 && open.length===1){
+   const [i,j]=open[0];
+   quick=[];
+   document.querySelector("#quickNums").textContent=`${a}, ${b}`;
+   makePair(i,j);
+   const e1=board.querySelector(`.cell[data-index="${i}"]`);
+   const e2=board.querySelector(`.cell[data-index="${j}"]`);
+   e1?.classList.add("quick-blue"); e2?.classList.add("quick-blue");
+   setTimeout(render,350);
+   return;
+ }
+
+ if(found.length===0){
+   [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("hint"));
+ } else if(open.length===0){
+   [...new Set(found.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("quick-green"));
+ } else {
+   [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("quick-red"));
+ }
+
+ const shown=quick.join(", ");
+ setTimeout(()=>{render();document.querySelector("#quickNums").textContent=shown;quick=[]},450);
+}
+
+document.querySelector("#new").onclick=generate;
+document.querySelector("#clearBoard").onclick=()=>{resetPlay();render();startTimer();setMessage("Board cleared.");};
+document.querySelector("#size").onchange=generate;
+document.querySelector("#undo").onclick=()=>{if(!history.length)return;future.push(snapshot());restore(history.pop())};
+document.querySelector("#redo").onclick=()=>{if(!future.length)return;history.push(snapshot());restore(future.pop())};
+document.querySelector("#check").onclick=()=>{let d=duplicateKeys();if(d.size)setMessage(`Duplicate domino${d.size>1?"es":""}: ${[...d].join(", ")}`,"bad");else if(paired.size===R*C)setMessage("Everything checks out.","good");else setMessage("No duplicate dominoes so far.","good")};
+document.querySelector("#solution").onclick=e=>{showing=!showing;e.target.textContent=showing?"Hide Solution":"Show Solution";render()};
+document.querySelector("#solve").onclick=solveByLogic;
+document.querySelector("#hint").onclick=async()=>{
+  if(solving) return;
+
+  if(solverContradiction()){
+    setMessage("Fix the contradiction first, then try Hint again.","bad");
+    return;
+  }
+
+  // Same priority as Solve, but perform exactly ONE deduction.
+  let forced=findThreeSidesBlocked();
+  if(forced){
+    const [a,b]=forced;
+    solverPair(a,b,"Hint: forced tile — one cell has only one open side.","purple");
+    return;
+  }
+
+  let unique=findUniqueNumberPair();
+  if(unique){
+    const [a,b,k]=unique;
+    solverPair(a,b,`Hint: ${k} has only one possible location.`);
+    return;
+  }
+
+  const shared=findSharedEndpointPairBars();
+  if(shared){
+    addBarsAnimated(shared.edges,
+      `Hint: L/T/cross — ${shared.a}-${shared.b} must use this shared cell, so its other connections are barred.`);
+    return;
+  }
+
+  const reserved=findReservedPairBars();
+  if(reserved){
+    addBarsAnimated(reserved.edges,
+      `Hint: L/T/cross — ${reserved.a}-${reserved.b} is reserved here, so other ${reserved.a}-${reserved.b} locations are barred.`);
+    return;
+  }
+
+  setMessage("No logical hint is available without making a guess.");
+};
+document.addEventListener("keydown",e=>{
+  const typing=e.target.matches("input,select,textarea");
+
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){
+    e.preventDefault();document.querySelector("#undo").click();return;
+  }
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y"){
+    e.preventDefault();document.querySelector("#redo").click();return;
+  }
+  if(typing || e.ctrlKey || e.metaKey || e.altKey) return;
+
+  const k=e.key.toLowerCase();
+  if(k==="h"){e.preventDefault();document.querySelector("#hint").click();return;}
+  if(k==="s"){e.preventDefault();document.querySelector("#solve").click();return;}
+  if(k==="c"){e.preventDefault();document.querySelector("#check").click();return;}
+  if(k==="x"){e.preventDefault();document.querySelector("#solution").click();return;}
+  if(k==="e"){e.preventDefault();document.querySelector("#manual").click();return;}
+  if(k==="a"){
+    e.preventDefault();
+    const aa=document.querySelector("#autoAssist");
+    if(!aa.checked){
+      aa.checked=true;
+      aa.dispatchEvent(new Event("change",{bubbles:true}));
+      setMessage("Auto Assist ON.","good");
+    }
+    return;
+  }
+  if(k==="o"){e.preventDefault();document.querySelector("#clearBoard").click();return;}
+  if(k==="p"){e.preventDefault();document.querySelector("#new").click();return;}
+
+  // Number keys remain available for Quick Check.
+  if(/^[0-9]$/.test(e.key)&&Number(e.key)<=MAX){
+    quick.push(Number(e.key));
+    if(quick.length>2)quick=quick.slice(-2);
+    runQuickCheck();
+  }
+});
+const modal=document.querySelector("#manualModal"), mg=document.querySelector("#manualGrid");
+configureSize();
+document.querySelector("#manual").onclick=()=>modal.classList.add("show");document.querySelector("#cancelManual").onclick=()=>modal.classList.remove("show");
+document.querySelector("#loadManual").onclick=()=>{let vals=[...mg.querySelectorAll("input")].map(x=>Number(x.value));if(vals.length!==R*C||vals.some(x=>!Number.isInteger(x)||x<0||x>MAX)){alert(`Every cell must contain a number from 0 to ${MAX}.`);return}
+ grid=vals;solution=[];resetPlay();render();startTimer();modal.classList.remove("show");setMessage("Manual puzzle loaded. Solution reveal is unavailable for manually entered puzzles.")};
+window.addEventListener("resize",render);
+
+// Warn before refresh, closing the tab/window, or navigating away.
+// Modern browsers display their own standard confirmation wording.
+window.addEventListener("beforeunload", e => {
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+generate();
+</script>
+</body>
+</html>
