@@ -952,6 +952,9 @@ function runQuickCheck(){
  } else if(open.length===0){
    [...new Set(found.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("quick-green"));
  } else {
+   // Confirmed copy exists, but other locations are still possible:
+   // flash the completed domino green and the alternatives red.
+   [...new Set(found.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("quick-green"));
    [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("quick-red"));
  }
 
