@@ -634,16 +634,15 @@ function duplicateKeys(){let counts={};for(let [a,b] of paired)if(a<b){let k=pai
 function autoAssistLogicStatus(){
   if(!autoAssistOn() || solving || showing) return "";
 
-  // Don't call a normal logical pause a guess: if any of the four solver
-  // deductions is currently available, the player still has a logic move.
+  // Mirror Hint's exact deduction order after every board change.
+  // This is a read-only check: it does not place tiles or add bars.
+  if(findDeadCell()!==null || duplicatePairCells().size) return "";
   if(findThreeSidesBlocked()) return "";
   if(findUniqueNumberPair()) return "";
   if(findSharedEndpointPairBars()) return "";
   if(findReservedPairBars()) return "";
 
-  // Only show the note for an unfinished, non-contradictory position.
   if(paired.size===R*C) return "";
-  if(findDeadCell()!==null || duplicatePairCells().size) return "";
   return "No more logical moves available — you need to make a guess.";
 }
 function updateAutoAssistBottomNote(){
@@ -916,7 +915,8 @@ function runQuickCheck(){
  }
 
  const shown=quick.join(", ");
- setTimeout(()=>{render();document.querySelector("#quickNums").textContent=shown;quick=[]},450);
+ quick=[]; // clear immediately so the next tap always starts a fresh pair
+ setTimeout(()=>{render();document.querySelector("#quickNums").textContent=shown},450);
 }
 
 document.addEventListener("pointerdown",()=>{if(soundOn())ensureAudio()},{once:true});
