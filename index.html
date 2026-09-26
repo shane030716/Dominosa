@@ -135,6 +135,19 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
 button, select, #quickPad, #quickPad button, .controls, .stats{
   touch-action: manipulation;
 }
+
+.quick-status{
+  min-height:22px;
+  margin:6px 0 4px;
+  font-weight:700;
+  color:#b45309;
+  text-align:center;
+}
+.quick-status:empty{min-height:0;margin:0}
+@media(max-width:650px){
+  .quick-status{font-size:14px;line-height:1.3;margin:6px 4px 2px}
+  .quick-status:empty{min-height:0;margin:0}
+}
 </style>
 </head>
 <body>
@@ -155,6 +168,7 @@ button, select, #quickPad, #quickPad button, .controls, .stats{
   </div>
   <div class="quick">Quick Check: <b id="quickNums">—</b> <span>Type two numbers (0–9) to highlight every currently possible location.</span></div>
   <div class="quick-mobile-row"><div id="quickPad" class="quick-pad" aria-label="Quick Check number pad"></div><button id="quickUndo" type="button" class="quick-undo">Undo</button></div>
+  <div id="quickStatus" class="quick-status" aria-live="polite"></div>
   <div class="shortcuts"><b>Keyboard:</b>
     <span><kbd>H</kbd> Hint</span><span><kbd>S</kbd> Solve</span><span><kbd>C</kbd> Check</span>
     <span><kbd>X</kbd> Solution</span><span><kbd>E</kbd> Manual</span><span><kbd>A</kbd> Auto Assist On</span>
@@ -647,8 +661,9 @@ function autoAssistLogicStatus(){
 }
 function updateAutoAssistBottomNote(){
   const note=autoAssistLogicStatus();
+  const guessText="No more logical moves available — you need to make a guess.";
   if(note) setMessage(note);
-  else if(msg.textContent==="No more logical moves available — you need to make a guess.") setMessage("");
+  else if(msg.textContent===guessText) setMessage("");
 }
 
 function render(){
@@ -686,7 +701,6 @@ function render(){
   for(let e of blocked){let [a,b]=e.split("-").map(Number);drawBar(a,b)}
   if(showing)for(let [a,b] of solution)if(!paired.has(a))drawOutline(a,b,true);
   updateStats();
-  updateAutoAssistBottomNote();
 }
 function drawOutline(a,b,sol=false,isTentative=false){
   let [r1,c1]=rc(a),[r2,c2]=rc(b),gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gap")),cell=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
@@ -739,6 +753,28 @@ function checkComplete(){
 function updateStats(){document.querySelector("#moves").textContent=moves;document.querySelector("#pairs").textContent=`${paired.size/2}/${TOTAL}`;document.querySelector("#time").textContent=`${String(Math.floor(seconds/60)).padStart(2,"0")}:${String(seconds%60).padStart(2,"0")}`}
 function startTimer(){clearInterval(timer);timer=setInterval(()=>{seconds++;updateStats()},1000)}
 function setMessage(t,c=""){msg.textContent=t;msg.className="message "+c}
+function clearQuickStatus(){
+  const el=document.querySelector("#quickStatus");
+  if(el)el.textContent="";
+}
+function hintMoveAvailable(){
+  // Exact read-only mirror of Hint's four deduction rules.
+  if(findThreeSidesBlocked()) return true;
+  if(findUniqueNumberPair()) return true;
+  if(findSharedEndpointPairBars()) return true;
+  if(findReservedPairBars()) return true;
+  return false;
+}
+function updateQuickStatus(){
+  const el=document.querySelector("#quickStatus");
+  if(!el)return;
+  if(!autoAssistOn() || solving || showing || paired.size===R*C){
+    el.textContent="";
+    return;
+  }
+  // If Hint would have no logical deduction right now, tell the player a guess is needed.
+  el.textContent=hintMoveAvailable() ? "" : "No more logical moves available — you need to make a guess.";
+}
 
 function gapFromPoint(x,y){
  const rect=board.getBoundingClientRect(), gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gap")), cell=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
@@ -862,13 +898,15 @@ function quickLogicCluster(a,b){
 function runQuickCheck(){
  document.querySelector("#quickNums").textContent=quick.join(", ");
  if(quick.length<2)return;
+ setMessage("");
+ clearQuickStatus();
  sfx("quick");
  let a=Math.min(...quick),b=Math.max(...quick), open=[], found=[];
 
  for(let [i,j] of paired){
    if(i<j){
      let x=Math.min(grid[i],grid[j]),y=Math.max(grid[i],grid[j]);
-     if(x===a&&y===b && !tentative.has(edge(i,j))) found.push([i,j]);
+     if(x===a&&y===b) found.push([i,j]);
    }
  }
 
@@ -887,7 +925,10 @@ function runQuickCheck(){
    const e1=board.querySelector(`.cell[data-index="${i}"]`);
    const e2=board.querySelector(`.cell[data-index="${j}"]`);
    e1?.classList.add("quick-blue"); e2?.classList.add("quick-blue");
-   setTimeout(render,350);
+   setTimeout(()=>{
+     render();
+     updateQuickStatus();
+   },350);
    return;
  }
 
@@ -916,11 +957,19 @@ function runQuickCheck(){
 
  const shown=quick.join(", ");
  quick=[]; // clear immediately so the next tap always starts a fresh pair
- setTimeout(()=>{render();document.querySelector("#quickNums").textContent=shown},450);
+ setTimeout(()=>{
+   render();
+   document.querySelector("#quickNums").textContent=shown;
+   updateQuickStatus();
+ },450);
 }
 
 document.addEventListener("pointerdown",()=>{if(soundOn())ensureAudio()},{once:true});
-document.querySelector("#autoAssist").addEventListener("change",()=>{render();});
+document.querySelector("#autoAssist").addEventListener("change",()=>{
+  render();
+  if(autoAssistOn()) updateQuickStatus();
+  else clearQuickStatus();
+});
 document.querySelector("#soundToggle").onchange=()=>{if(soundOn()){ensureAudio();tone(520,.05,"sine",.02)}};
 ["#undo","#redo","#quickUndo"].forEach(sel=>{
   const el=document.querySelector(sel);
