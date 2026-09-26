@@ -142,7 +142,7 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
     <button class="primary" id="new">New Puzzle</button>
     <label class="toggle" title="Automatically place forced dominoes and eliminate duplicate-number alternatives">
       <input type="checkbox" id="autoAssist"> Auto Assist
-    </label>
+    </label><label class="toggle" title="Game sound effects"><input type="checkbox" id="soundToggle" checked> Sound</label>
     <button id="undo">Undo</button><button id="redo">Redo</button><button id="clearBoard">Clear Board</button>
     <button id="hint">Hint</button><button id="solve">Solve</button><button id="check">Check</button>
     <button id="solution">Show Solution</button><button id="manual">Enter Manually</button>
@@ -159,7 +159,7 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
   <div class="help">
     <b>How to play:</b> Pair adjacent cells so every unordered pair 0–0 through 6–6 is used exactly once.
     Drag from one cell to an adjacent cell to confirm a domino. Clicking two adjacent cells makes a grey tentative domino, indicating it is not confirmed.
-    Tap/click the space between two cells (or right along that cell edge) to connect them. Drag from one cell to an adjacent cell for a temporary connection. On computer, double-click between two cells to add/remove a gray bar. On touch screens, long-press the quarter of a cell facing a neighbor. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
+    Tap/click the space between two cells (or right along that cell edge) to connect them. Drag from one cell to an adjacent cell for a temporary connection. On computer, right-click between two cells to add/remove a gray bar. On touch screens, long-press the quarter of a cell facing a neighbor. Type two digits such as <kbd>0</kbd><kbd>0</kbd> to highlight all possible 0–0 domino locations.
     <kbd>Ctrl/Cmd+Z</kbd> undo, <kbd>Ctrl/Cmd+Y</kbd> redo.
     <b>Auto Assist:</b> Quick Check automatically connects a domino when only one location remains; when you create either a confirmed or grey tentative domino, all other adjacent occurrences of the same number pair are automatically barred. <b>Solve:</b> works step-by-step using two basic rules plus two L/T/cross rules: a cell with one open side; a number pair with only one possible location; shared-centre elimination; and reserved-pair elimination. When those rules are stuck, Solve scans from the top-left for the first unsolved cell whose only open sides are right and bottom, guesses right first, and keeps solving. If that branch causes a contradiction, it returns to that guess and tries bottom. If it gets stuck again, it makes the next guess the same way.
   </div>
@@ -176,6 +176,11 @@ const board=document.querySelector("#board"), msg=document.querySelector("#messa
 let grid=[], solution=[], paired=new Map(), blocked=new Set(), selected=null, history=[], future=[];
 let moves=0, seconds=0, timer=null, showing=false, dragStart=null, dragging=false, quick=[], quickDigit=n=>{if(n<0||n>MAX)return;quick.push(n);if(quick.length>2)quick=quick.slice(-2);runQuickCheck()}, renderQuickPad=()=>{const pad=document.querySelector("#quickPad");if(!pad)return;pad.innerHTML="";for(let n=0;n<=MAX;n++){const b=document.createElement("button");b.type="button";b.textContent=n;b.onclick=()=>quickDigit(n);b.ondblclick=e=>e.preventDefault();pad.appendChild(b)}}, tentative=new Set(), solving=false, solverGuesses=[], guessStyles=new Map();
 
+let audioCtx=null;
+function soundOn(){return document.querySelector("#soundToggle")?.checked!==false}
+function ensureAudio(){if(!soundOn())return null;if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume();return audioCtx}
+function tone(f,d=.06,type="sine",v=.03,delay=0,end=null){const x=ensureAudio();if(!x)return;const t=x.currentTime+delay,o=x.createOscillator(),g=x.createGain();o.type=type;o.frequency.setValueAtTime(f,t);if(end)o.frequency.exponentialRampToValueAtTime(end,t+d);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(x.destination);o.start(t);o.stop(t+d+.02)}
+function sfx(n){if(!soundOn())return;if(n==="confirm"){tone(360,.045,"triangle",.035);tone(540,.045,"triangle",.025,.035)}else if(n==="temp")tone(280,.045,"sine",.022);else if(n==="bar"){tone(170,.055,"square",.025);tone(125,.04,"square",.018,.035)}else if(n==="remove")tone(390,.05,"sine",.025,0,230);else if(n==="deduce"){tone(520,.055,"sine",.025);tone(700,.07,"sine",.025,.045)}else if(n==="error"){tone(190,.11,"sawtooth",.025);tone(145,.13,"sawtooth",.02,.08)}else if(n==="win")[523,659,784,1047].forEach((f,i)=>tone(f,.13,"triangle",.04,i*.085))}
 const id=(r,c)=>r*C+c, rc=i=>[Math.floor(i/C),i%C], edge=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
 const adjacent=(a,b)=>{let [r1,c1]=rc(a),[r2,c2]=rc(b);return Math.abs(r1-r2)+Math.abs(c1-c2)===1};
 const pairKey=(a,b)=>{let x=grid[a],y=grid[b];return x<=y?`${x}-${y}`:`${y}-${x}`};
@@ -267,6 +272,7 @@ function snapshot(){return {paired:[...paired],blocked:[...blocked],tentative:[.
 function restore(s){paired=new Map(s.paired);blocked=new Set(s.blocked);tentative=new Set(s.tentative||[]);guessStyles=new Map(s.guessStyles||[]);moves=s.moves;selected=null;render()}
 function act(fn){history.push(snapshot());future=[];fn();moves++;render()}
 function makePair(a,b,isTentative=false){
+  sfx(isTentative?"temp":"confirm");
   if(!adjacent(a,b)||paired.has(a)||paired.has(b)||blocked.has(edge(a,b)))return;
   act(()=>{
     paired.set(a,b);paired.set(b,a);
@@ -278,8 +284,8 @@ function makePair(a,b,isTentative=false){
   selected=null;
   if(!isTentative) checkComplete();
 }
-function removePair(a){if(!paired.has(a))return;let b=paired.get(a);act(()=>{tentative.delete(edge(a,b));guessStyles.delete(edge(a,b));paired.delete(a);paired.delete(b)})}
-function toggleBlock(a,b){if(!adjacent(a,b)||paired.has(a)||paired.has(b))return;act(()=>{let e=edge(a,b);blocked.has(e)?blocked.delete(e):blocked.add(e)})}
+function removePair(a){sfx("remove");if(!paired.has(a))return;let b=paired.get(a);act(()=>{tentative.delete(edge(a,b));guessStyles.delete(edge(a,b));paired.delete(a);paired.delete(b)})}
+function toggleBlock(a,b){sfx(blocked.has(edge(a,b))?"remove":"bar");if(!adjacent(a,b)||paired.has(a)||paired.has(b))return;act(()=>{let e=edge(a,b);blocked.has(e)?blocked.delete(e):blocked.add(e)})}
 function autoAssistOn(){return document.querySelector("#autoAssist").checked}
 function addDuplicateBarsFor(a,b){
   if(!autoAssistOn()) return;
@@ -315,6 +321,7 @@ function usedNumberPairs(){
   return used;
 }
 function solverPair(a,b,reason,flash="blue"){
+  sfx("deduce");
   if(paired.has(a)||paired.has(b)||blocked.has(edge(a,b))) return false;
   act(()=>{
     paired.set(a,b); paired.set(b,a);
@@ -670,7 +677,7 @@ function drawBar(a,b){let [r1,c1]=rc(a),[r2,c2]=rc(b),gap=parseInt(getComputedSt
  if(r1===r2){el.style.width="6px";el.style.height=(cell*.65)+"px"}else{el.style.width=(cell*.65)+"px";el.style.height="6px"}
  board.appendChild(el)}
 function isSolutionEdge(a,b){return solution.some(p=>edge(...p)===edge(a,b))}
-function celebrateWin(){
+function celebrateWin(){sfx("win");
   document.querySelector(".board-wrap").classList.remove("win-pop");
   void document.querySelector(".board-wrap").offsetWidth;
   document.querySelector(".board-wrap").classList.add("win-pop");
@@ -735,17 +742,14 @@ board.addEventListener("click",e=>{
   if(paired.get(a)===b)removePair(a);
   else if(!paired.has(a)&&!paired.has(b)&&!blocked.has(edge(a,b)))makePair(a,b,false);
 });
-board.addEventListener("dblclick",e=>{
-  if(e.pointerType==="touch")return;
-  e.preventDefault();
+board.addEventListener("contextmenu",e=>{
   const g=connectionFromTap(e);
   if(!g)return;
+  e.preventDefault();
   const [a,b]=g;
-  // A dblclick fires click events first; remove any connection those clicks
-  // may have created, then toggle the intended bar.
-  if(paired.get(a)===b)removePair(a);
   if(!paired.has(a)&&!paired.has(b))toggleBlock(a,b);
 });
+
 document.addEventListener("selectstart",e=>{
   if(e.target.closest("input,textarea,select"))return;
   if(e.target.closest("#board,.controls,.quick,.quick-pad,.stats,.help"))e.preventDefault();
@@ -821,6 +825,8 @@ function runQuickCheck(){
  setTimeout(()=>{render();document.querySelector("#quickNums").textContent=shown;quick=[]},450);
 }
 
+document.addEventListener("pointerdown",()=>{if(soundOn())ensureAudio()},{once:true});
+document.querySelector("#soundToggle").onchange=()=>{if(soundOn()){ensureAudio();tone(520,.05,"sine",.02)}};
 document.querySelector("#quickUndo").onclick=()=>document.querySelector("#undo").click();
 document.querySelector("#new").onclick=generate;
 document.querySelector("#clearBoard").onclick=()=>{resetPlay();render();startTimer();setMessage("Board cleared.");};
