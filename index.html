@@ -22,6 +22,7 @@ button:hover{background:#f8fafc}.primary{background:var(--accent);color:white;bo
 .cell.tentative{background:#8a929c;color:white;border-color:#737b85}
 .cell.guess-h{background:#b9bec5!important;color:white!important;border-color:#a3a9b1!important}
 .cell.guess-v{background:#5f6670!important;color:white!important;border-color:#4c535c!important}
+.cell.quick-logic-orange{background:#f59e0b!important;color:#111!important;}
 .cell.dead{background:#f28c28!important;color:white!important;border-color:#c7650b!important;animation:deadPulse .32s 3 alternate}
 @keyframes deadPulse{to{transform:scale(.94);box-shadow:inset 0 0 0 4px #ffbf69}}
 .cell.duplicate{background:var(--bad);border-color:var(--bad)}.cell.hint{animation:flash .14s 4 alternate}
@@ -129,6 +130,11 @@ kbd{border:1px solid #c9cfd7;background:#fff;border-radius:4px;padding:1px 5px}
 .quick-mobile-row .quick-pad{flex:1;margin:0;max-width:none}
 .quick-undo{display:block;flex:0 0 64px;padding:6px;font-size:13px;font-weight:700}
 }
+
+/* Prevent iOS double-tap zoom on game controls while preserving pinch zoom. */
+button, select, #quickPad, #quickPad button, .controls, .stats{
+  touch-action: manipulation;
+}
 </style>
 </head>
 <body>
@@ -180,7 +186,7 @@ let audioCtx=null;
 function soundOn(){return document.querySelector("#soundToggle")?.checked!==false}
 function ensureAudio(){if(!soundOn())return null;if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume();return audioCtx}
 function tone(f,d=.06,type="sine",v=.03,delay=0,end=null){const x=ensureAudio();if(!x)return;const t=x.currentTime+delay,o=x.createOscillator(),g=x.createGain();o.type=type;o.frequency.setValueAtTime(f,t);if(end)o.frequency.exponentialRampToValueAtTime(end,t+d);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(x.destination);o.start(t);o.stop(t+d+.02)}
-function sfx(n){if(!soundOn())return;if(n==="confirm"){tone(360,.045,"triangle",.035);tone(540,.045,"triangle",.025,.035)}else if(n==="temp")tone(280,.045,"sine",.022);else if(n==="bar"){tone(170,.055,"square",.025);tone(125,.04,"square",.018,.035)}else if(n==="remove")tone(390,.05,"sine",.025,0,230);else if(n==="deduce"){tone(520,.055,"sine",.025);tone(700,.07,"sine",.025,.045)}else if(n==="error"){tone(190,.11,"sawtooth",.025);tone(145,.13,"sawtooth",.02,.08)}else if(n==="quick")tone(460,.035,"sine",.014);else if(n==="win")[523,659,784,1047].forEach((f,i)=>tone(f,.13,"triangle",.04,i*.085))}
+function sfx(n){if(!soundOn())return;if(n==="confirm"){tone(360,.045,"triangle",.035);tone(540,.045,"triangle",.025,.035)}else if(n==="temp")tone(280,.045,"sine",.022);else if(n==="bar"){tone(170,.055,"square",.025);tone(125,.04,"square",.018,.035)}else if(n==="remove")tone(390,.05,"sine",.025,0,230);else if(n==="deduce"){tone(520,.055,"sine",.025);tone(700,.07,"sine",.025,.045)}else if(n==="error"){tone(190,.11,"sawtooth",.025);tone(145,.13,"sawtooth",.02,.08)}else if(n==="quick")tone(460,.035,"sine",.014);else if(n==="quickLogic"){tone(430,.055,"triangle",.024);tone(610,.065,"triangle",.027,.045);tone(790,.085,"sine",.025,.095)}else if(n==="win")[523,659,784,1047].forEach((f,i)=>tone(f,.13,"triangle",.04,i*.085))}
 const id=(r,c)=>r*C+c, rc=i=>[Math.floor(i/C),i%C], edge=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
 const adjacent=(a,b)=>{let [r1,c1]=rc(a),[r2,c2]=rc(b);return Math.abs(r1-r2)+Math.abs(c1-c2)===1};
 const pairKey=(a,b)=>{let x=grid[a],y=grid[b];return x<=y?`${x}-${y}`:`${y}-${x}`};
@@ -624,6 +630,28 @@ function cellClick(i){
   if(adjacent(selected,i)){let a=selected;selected=null;makePair(a,i,true)} else {selected=i;render()}
 }
 function duplicateKeys(){let counts={};for(let [a,b] of paired)if(a<b){let k=pairKey(a,b);counts[k]=(counts[k]||0)+1}return new Set(Object.keys(counts).filter(k=>counts[k]>1))}
+
+function autoAssistLogicStatus(){
+  if(!autoAssistOn() || solving || showing) return "";
+
+  // Don't call a normal logical pause a guess: if any of the four solver
+  // deductions is currently available, the player still has a logic move.
+  if(findThreeSidesBlocked()) return "";
+  if(findUniqueNumberPair()) return "";
+  if(findSharedEndpointPairBars()) return "";
+  if(findReservedPairBars()) return "";
+
+  // Only show the note for an unfinished, non-contradictory position.
+  if(paired.size===R*C) return "";
+  if(findDeadCell()!==null || duplicatePairCells().size) return "";
+  return "No more logical moves available — you need to make a guess.";
+}
+function updateAutoAssistBottomNote(){
+  const note=autoAssistLogicStatus();
+  if(note) setMessage(note);
+  else if(msg.textContent==="No more logical moves available — you need to make a guess.") setMessage("");
+}
+
 function render(){
   const root=document.documentElement;
   const wrap=document.querySelector(".board-wrap");
@@ -659,6 +687,7 @@ function render(){
   for(let e of blocked){let [a,b]=e.split("-").map(Number);drawBar(a,b)}
   if(showing)for(let [a,b] of solution)if(!paired.has(a))drawOutline(a,b,true);
   updateStats();
+  updateAutoAssistBottomNote();
 }
 function drawOutline(a,b,sol=false,isTentative=false){
   let [r1,c1]=rc(a),[r2,c2]=rc(b),gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--gap")),cell=parseInt(getComputedStyle(document.documentElement).getPropertyValue("--cell"));
@@ -782,6 +811,55 @@ board.addEventListener("pointermove",e=>{
 board.addEventListener("pointerup",()=>{clearTimeout(barHoldTimer);barHoldStart=null});
 board.addEventListener("pointercancel",()=>{clearTimeout(barHoldTimer);barHoldStart=null});
 
+
+function quickLogicCluster(a,b){
+  if(!autoAssistOn())return null;
+  const key=[a,b].sort((x,y)=>x-y).join("-");
+  const used=usedNumberPairs();
+  if(used.has(key))return null;
+
+  // Logic 3: every remaining placement of this pair shares one centre.
+  const possibilities=[];
+  for(let i=0;i<R*C;i++){
+    if(paired.has(i))continue;
+    for(const j of openNeighbors(i)){
+      if(i<j && pairKey(i,j)===key)possibilities.push([i,j]);
+    }
+  }
+  if(possibilities.length>=2){
+    let common=new Set(possibilities[0]);
+    for(const [x,y] of possibilities)common=new Set([...common].filter(v=>v===x||v===y));
+    if(common.size===1){
+      const c=[...common][0], clusterEdges=new Set(possibilities.map(([x,y])=>edge(x,y)));
+      const useful=openNeighbors(c).some(n=>!clusterEdges.has(edge(c,n))&&!blocked.has(edge(c,n)));
+      if(useful)return [...new Set(possibilities.flat())];
+    }
+  }
+
+  // Logic 4: a centre can only connect to neighbours carrying the other
+  // number of this queried pair, reserving this pair inside the local cluster.
+  for(let c=0;c<R*C;c++){
+    if(paired.has(c))continue;
+    const opts=openNeighbors(c);
+    if(opts.length<2)continue;
+    const ca=grid[c], ob=grid[opts[0]];
+    if(!opts.every(x=>grid[x]===ob))continue;
+    if([ca,ob].sort((x,y)=>x-y).join("-")!==key)continue;
+    const inside=new Set(opts.map(x=>edge(c,x)));
+    let useful=false;
+    for(let i=0;i<R*C&&!useful;i++){
+      if(paired.has(i))continue;
+      for(const j of openNeighbors(i)){
+        if(i>=j)continue;
+        const e=edge(i,j);
+        if(!inside.has(e)&&pairKey(i,j)===key){useful=true;break}
+      }
+    }
+    if(useful)return [c,...opts];
+  }
+  return null;
+}
+
 function runQuickCheck(){
  document.querySelector("#quickNums").textContent=quick.join(", ");
  if(quick.length<2)return;
@@ -814,7 +892,11 @@ function runQuickCheck(){
    return;
  }
 
- if(found.length===0){
+ const logicCluster=quickLogicCluster(a,b);
+ if(logicCluster){
+   sfx("quickLogic");
+   logicCluster.forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("quick-logic-orange"));
+ } else if(found.length===0){
    [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("hint"));
  } else if(open.length===0){
    [...new Set(found.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("quick-green"));
@@ -827,7 +909,12 @@ function runQuickCheck(){
 }
 
 document.addEventListener("pointerdown",()=>{if(soundOn())ensureAudio()},{once:true});
+document.querySelector("#autoAssist").addEventListener("change",()=>{render();});
 document.querySelector("#soundToggle").onchange=()=>{if(soundOn()){ensureAudio();tone(520,.05,"sine",.02)}};
+["#undo","#redo","#quickUndo"].forEach(sel=>{
+  const el=document.querySelector(sel);
+  if(el)el.addEventListener("dblclick",e=>e.preventDefault());
+});
 document.querySelector("#quickUndo").onclick=()=>document.querySelector("#undo").click();
 document.querySelector("#new").onclick=generate;
 document.querySelector("#clearBoard").onclick=()=>{resetPlay();render();startTimer();setMessage("Board cleared.");};
