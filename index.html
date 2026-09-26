@@ -290,7 +290,7 @@ function generate(){
 function resetPlay(){paired.clear();blocked.clear();tentative.clear();guessStyles.clear();selected=null;history=[];future=[];moves=0;seconds=0;showing=false;updateStats()}
 function snapshot(){return {paired:[...paired],blocked:[...blocked],tentative:[...tentative],guessStyles:[...guessStyles],moves}}
 function restore(s){paired=new Map(s.paired);blocked=new Set(s.blocked);tentative=new Set(s.tentative||[]);guessStyles=new Map(s.guessStyles||[]);moves=s.moves;selected=null;render()}
-function act(fn){history.push(snapshot());future=[];fn();moves++;render()}
+function act(fn){clearQuickStatus();history.push(snapshot());future=[];fn();moves++;render()}
 function makePair(a,b,isTentative=false){
   sfx(isTentative?"temp":"confirm");
   if(!adjacent(a,b)||paired.has(a)||paired.has(b)||blocked.has(edge(a,b)))return;
@@ -979,8 +979,8 @@ document.querySelector("#quickUndo").onclick=()=>document.querySelector("#undo")
 document.querySelector("#new").onclick=generate;
 document.querySelector("#clearBoard").onclick=()=>{resetPlay();render();startTimer();setMessage("Board cleared.");};
 document.querySelector("#size").onchange=generate;
-document.querySelector("#undo").onclick=()=>{if(!history.length)return;future.push(snapshot());restore(history.pop())};
-document.querySelector("#redo").onclick=()=>{if(!future.length)return;history.push(snapshot());restore(future.pop())};
+document.querySelector("#undo").onclick=()=>{if(!history.length)return;clearQuickStatus();future.push(snapshot());restore(history.pop())};
+document.querySelector("#redo").onclick=()=>{if(!future.length)return;clearQuickStatus();history.push(snapshot());restore(future.pop())};
 document.querySelector("#check").onclick=()=>{let d=duplicateKeys();if(d.size)setMessage(`Duplicate domino${d.size>1?"es":""}: ${[...d].join(", ")}`,"bad");else if(paired.size===R*C)setMessage("Everything checks out.","good");else setMessage("No duplicate dominoes so far.","good")};
 document.querySelector("#solution").onclick=e=>{showing=!showing;e.target.textContent=showing?"Hide Solution":"Show Solution";render()};
 document.querySelector("#solve").onclick=solveByLogic;
