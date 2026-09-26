@@ -867,7 +867,12 @@ function quickLogicCluster(a,b){
     if(common.size===1){
       const c=[...common][0], clusterEdges=new Set(possibilities.map(([x,y])=>edge(x,y)));
       const useful=openNeighbors(c).some(n=>!clusterEdges.has(edge(c,n))&&!blocked.has(edge(c,n)));
-      if(useful)return {logic:3,cells:[...new Set(possibilities.flat())]};
+      if(useful){
+        const bars=openNeighbors(c)
+          .map(n=>edge(c,n))
+          .filter(e=>!clusterEdges.has(e) && !blocked.has(e));
+        return {logic:3,cells:[...new Set(possibilities.flat())],bars};
+      }
     }
   }
 
@@ -890,7 +895,18 @@ function quickLogicCluster(a,b){
         if(!inside.has(e)&&pairKey(i,j)===key){useful=true;break}
       }
     }
-    if(useful)return {logic:4,cells:[c,...opts]};
+    if(useful){
+      const bars=[];
+      for(let i=0;i<R*C;i++){
+        if(paired.has(i))continue;
+        for(const j of openNeighbors(i)){
+          if(i>=j)continue;
+          const e=edge(i,j);
+          if(!inside.has(e) && pairKey(i,j)===key && !blocked.has(e)) bars.push(e);
+        }
+      }
+      return {logic:4,cells:[c,...opts],bars:[...new Set(bars)]};
+    }
   }
   return null;
 }
@@ -949,14 +965,8 @@ function runQuickCheck(){
      el?.classList.add("quick-logic-orange");
    });
 
-   if(autoAssistOn()){
-     if(logicCluster.logic===3){
-       const d=findSharedEndpointPairBars();
-       if(d && [d.a,d.b].sort((x,y)=>x-y).join("-")===`${a}-${b}`) quickLogicBars=d.edges;
-     }else if(logicCluster.logic===4){
-       const d=findReservedPairBars();
-       if(d && [d.a,d.b].sort((x,y)=>x-y).join("-")===`${a}-${b}`) quickLogicBars=d.edges;
-     }
+   if(autoAssistOn() && logicCluster.bars?.length){
+     quickLogicBars=logicCluster.bars;
    }
  } else if(found.length===0){
    [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("hint"));
