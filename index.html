@@ -933,12 +933,13 @@ function runQuickCheck(){
  }
 
  const logicCluster=quickLogicCluster(a,b);
+ let quickLogicBars=null;
  if(logicCluster){
    sfx("quickLogic");
-   // Logic 3: the shared-centre pattern itself is the useful information,
-   // so only that L/T/Cross is orange.
-   // Logic 4: the local cluster reserves this number-pair, so other possible
-   // occurrences remain yellow while the reserved cluster is orange.
+   // Logic 3: orange shows the shared-centre cluster; after the flash,
+   // Auto Assist bars the centre's other impossible connections.
+   // Logic 4: orange shows the reserved local cluster and yellow shows the
+   // other occurrences; after the flash, Auto Assist bars those yellow edges.
    if(logicCluster.logic===4 && found.length===0){
      [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("hint"));
    }
@@ -947,6 +948,16 @@ function runQuickCheck(){
      el?.classList.remove("hint");
      el?.classList.add("quick-logic-orange");
    });
+
+   if(autoAssistOn()){
+     if(logicCluster.logic===3){
+       const d=findSharedEndpointPairBars();
+       if(d && [d.a,d.b].sort((x,y)=>x-y).join("-")===`${a}-${b}`) quickLogicBars=d.edges;
+     }else if(logicCluster.logic===4){
+       const d=findReservedPairBars();
+       if(d && [d.a,d.b].sort((x,y)=>x-y).join("-")===`${a}-${b}`) quickLogicBars=d.edges;
+     }
+   }
  } else if(found.length===0){
    [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("hint"));
  } else if(open.length===0){
@@ -961,10 +972,15 @@ function runQuickCheck(){
  const shown=quick.join(", ");
  quick=[]; // clear immediately so the next tap always starts a fresh pair
  setTimeout(()=>{
-   render();
+   if(quickLogicBars?.length){
+     act(()=>{for(const e of quickLogicBars) blocked.add(e)});
+     sfx("bar");
+   }else{
+     render();
+   }
    document.querySelector("#quickNums").textContent=shown;
    updateQuickStatus();
- },450);
+ },500);
 }
 
 document.addEventListener("pointerdown",()=>{if(soundOn())ensureAudio()},{once:true});
