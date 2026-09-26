@@ -180,7 +180,7 @@ let audioCtx=null;
 function soundOn(){return document.querySelector("#soundToggle")?.checked!==false}
 function ensureAudio(){if(!soundOn())return null;if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume();return audioCtx}
 function tone(f,d=.06,type="sine",v=.03,delay=0,end=null){const x=ensureAudio();if(!x)return;const t=x.currentTime+delay,o=x.createOscillator(),g=x.createGain();o.type=type;o.frequency.setValueAtTime(f,t);if(end)o.frequency.exponentialRampToValueAtTime(end,t+d);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+.008);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g);g.connect(x.destination);o.start(t);o.stop(t+d+.02)}
-function sfx(n){if(!soundOn())return;if(n==="confirm"){tone(360,.045,"triangle",.035);tone(540,.045,"triangle",.025,.035)}else if(n==="temp")tone(280,.045,"sine",.022);else if(n==="bar"){tone(170,.055,"square",.025);tone(125,.04,"square",.018,.035)}else if(n==="remove")tone(390,.05,"sine",.025,0,230);else if(n==="deduce"){tone(520,.055,"sine",.025);tone(700,.07,"sine",.025,.045)}else if(n==="error"){tone(190,.11,"sawtooth",.025);tone(145,.13,"sawtooth",.02,.08)}else if(n==="win")[523,659,784,1047].forEach((f,i)=>tone(f,.13,"triangle",.04,i*.085))}
+function sfx(n){if(!soundOn())return;if(n==="confirm"){tone(360,.045,"triangle",.035);tone(540,.045,"triangle",.025,.035)}else if(n==="temp")tone(280,.045,"sine",.022);else if(n==="bar"){tone(170,.055,"square",.025);tone(125,.04,"square",.018,.035)}else if(n==="remove")tone(390,.05,"sine",.025,0,230);else if(n==="deduce"){tone(520,.055,"sine",.025);tone(700,.07,"sine",.025,.045)}else if(n==="error"){tone(190,.11,"sawtooth",.025);tone(145,.13,"sawtooth",.02,.08)}else if(n==="quick")tone(460,.035,"sine",.014);else if(n==="win")[523,659,784,1047].forEach((f,i)=>tone(f,.13,"triangle",.04,i*.085))}
 const id=(r,c)=>r*C+c, rc=i=>[Math.floor(i/C),i%C], edge=(a,b)=>a<b?`${a}-${b}`:`${b}-${a}`;
 const adjacent=(a,b)=>{let [r1,c1]=rc(a),[r2,c2]=rc(b);return Math.abs(r1-r2)+Math.abs(c1-c2)===1};
 const pairKey=(a,b)=>{let x=grid[a],y=grid[b];return x<=y?`${x}-${y}`:`${y}-${x}`};
@@ -785,6 +785,7 @@ board.addEventListener("pointercancel",()=>{clearTimeout(barHoldTimer);barHoldSt
 function runQuickCheck(){
  document.querySelector("#quickNums").textContent=quick.join(", ");
  if(quick.length<2)return;
+ sfx("quick");
  let a=Math.min(...quick),b=Math.max(...quick), open=[], found=[];
 
  for(let [i,j] of paired){
