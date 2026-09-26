@@ -832,7 +832,7 @@ function quickLogicCluster(a,b){
     if(common.size===1){
       const c=[...common][0], clusterEdges=new Set(possibilities.map(([x,y])=>edge(x,y)));
       const useful=openNeighbors(c).some(n=>!clusterEdges.has(edge(c,n))&&!blocked.has(edge(c,n)));
-      if(useful)return [...new Set(possibilities.flat())];
+      if(useful)return {logic:3,cells:[...new Set(possibilities.flat())]};
     }
   }
 
@@ -855,7 +855,7 @@ function quickLogicCluster(a,b){
         if(!inside.has(e)&&pairKey(i,j)===key){useful=true;break}
       }
     }
-    if(useful)return [c,...opts];
+    if(useful)return {logic:4,cells:[c,...opts]};
   }
   return null;
 }
@@ -895,7 +895,18 @@ function runQuickCheck(){
  const logicCluster=quickLogicCluster(a,b);
  if(logicCluster){
    sfx("quickLogic");
-   logicCluster.forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("quick-logic-orange"));
+   // Logic 3: the shared-centre pattern itself is the useful information,
+   // so only that L/T/Cross is orange.
+   // Logic 4: the local cluster reserves this number-pair, so other possible
+   // occurrences remain yellow while the reserved cluster is orange.
+   if(logicCluster.logic===4 && found.length===0){
+     [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("hint"));
+   }
+   logicCluster.cells.forEach(i=>{
+     const el=board.querySelector(`.cell[data-index="${i}"]`);
+     el?.classList.remove("hint");
+     el?.classList.add("quick-logic-orange");
+   });
  } else if(found.length===0){
    [...new Set(open.flat())].forEach(i=>board.querySelector(`.cell[data-index="${i}"]`)?.classList.add("hint"));
  } else if(open.length===0){
